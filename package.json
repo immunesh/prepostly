@@ -1,0 +1,40 @@
+{
+  "name": "prepostly",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Prepostly — AI social media content automation: generate posts, carousels, videos and ads from your brand, then schedule and auto-post them to every channel.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "dev:server": "node --watch-path=server server/index.js",
+    "dev:web": "vite",
+    "build": "vite build",
+    "start": "NODE_ENV=production node server/index.js",
+    "fonts": "node scripts/fetch-fonts.js",
+    "heygen": "node scripts/heygen-list.js",
+    "test": "node --test --test-concurrency=1 test/unit/*.test.js test/integration/*.test.js",
+    "test:unit": "node --test test/unit/*.test.js",
+    "test:integration": "node --test --test-concurrency=1 test/integration/*.test.js",
+    "test:e2e": "node --test test/e2e/*.test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.136.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "express": "^5.3.0",
+    "ffmpeg-static": "^5.3.0"
+  },
+  "optionalDependencies": {
+    "kokoro-js": "^1.2.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.2",
+    "playwright-core": "^1.64.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.4",
+    "vite": "^8.3.4"
+  }
+}
