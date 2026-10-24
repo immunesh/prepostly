@@ -37,7 +37,7 @@ function Notifications() {
     }
   };
   return (
-    <Dropdown trigger={<button className="btn ghost icon-btn" onClick={open} aria-label="Notifications" style={{ position: 'relative' }}>🔔{me.unread > 0 && <span style={{ position: 'absolute', top: 4, right: 4, background: 'var(--brand-2)', color: '#fff', borderRadius: 99, fontSize: 10, padding: '0 5px', fontWeight: 700 }}>{me.unread}</span>}</button>}>
+    <Dropdown trigger={<button className="btn ghost icon-btn" onClick={open} aria-label="Notifications" style={{ position: 'relative' }}>🔔{me.unread > 0 && <span style={{ position: 'absolute', top: 4, right: 4, background: 'var(--lime)', color: 'var(--ink)', borderRadius: 99, fontSize: 10, padding: '0 5px', fontWeight: 700 }}>{me.unread}</span>}</button>}>
       <div style={{ width: 340, maxHeight: 420, overflowY: 'auto' }}>
         {!items.length && <div className="muted small" style={{ padding: 14 }}>No notifications yet.</div>}
         {items.map((n) => (

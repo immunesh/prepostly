@@ -48,7 +48,7 @@ export default function Onboarding() {
   const set = (k) => (e) => setB({ ...b, [k]: e.target.value });
 
   return (
-    <div style={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'radial-gradient(ellipse at top, #efe7ff 0, var(--bg) 60%)' }}>
+    <div style={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'linear-gradient(180deg, var(--lime) 0, var(--lime) 220px, var(--bg) 220px)' }}>
       <div className="card" style={{ width: 'min(640px, 100%)', padding: 32 }}>
         <div className="row" style={{ marginBottom: 20 }}><img src="/favicon.svg" alt="" width={34} /><span className="badge brand">Step {step} of 2</span></div>
         {error && <div className="alert err mb">{error}</div>}

@@ -5,11 +5,11 @@ import { useState } from 'react';
 // tooltips plus a table view.
 
 const INK = 'var(--text)';
-const MUTED = '#6b6785';
-const GRID = '#ece9f5';
-const SERIES = '#7c3aed';
+const MUTED = '#5d616d';
+const GRID = '#e8e7e1';
+const SERIES = '#3a7a26';
 // One-hue sequential ramp (light → dark) for magnitude.
-const RAMP = ['#f3eefe', '#e0d2fd', '#c4a8fb', '#a678f6', '#8b4cf0', '#6d28d9', '#4c1d95'];
+const RAMP = ['#eef5e6', '#d3e8c2', '#acd492', '#7fb85f', '#55963a', '#3a7a26', '#254f1a'];
 
 const niceMax = (v) => {
   if (v <= 0) return 1;
@@ -121,7 +121,7 @@ export function Heatmap({ grid }) {
   const [tip, setTip] = useState(null);
   const max = Math.max(1, ...grid.flat());
   const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const color = (v) => (v ? RAMP[Math.min(RAMP.length - 1, 1 + Math.floor((v / max) * (RAMP.length - 2)))] : '#f5f4fa');
+  const color = (v) => (v ? RAMP[Math.min(RAMP.length - 1, 1 + Math.floor((v / max) * (RAMP.length - 2)))] : '#f1f1ec');
   return (
     <div style={{ position: 'relative' }} onMouseLeave={() => setTip(null)}>
       <div className="heat">
@@ -150,7 +150,7 @@ export function HBars({ items, format = (v) => v.toLocaleString() }) {
       {items.map((i) => (
         <div key={i.label} title={`${i.label}: ${format(i.value)} (${Math.round((i.value / total) * 100)}%)`}>
           <div className="row between small"><span>{i.icon} {i.label}</span><span className="muted">{format(i.value)} · {Math.round((i.value / total) * 100)}%</span></div>
-          <div style={{ height: 8, background: '#f1eff8', borderRadius: 4, marginTop: 4 }}><div style={{ width: `${(i.value / max) * 100}%`, height: '100%', background: SERIES, borderRadius: 4 }} /></div>
+          <div style={{ height: 8, background: '#efeee9', borderRadius: 4, marginTop: 4 }}><div style={{ width: `${(i.value / max) * 100}%`, height: '100%', background: SERIES, borderRadius: 4 }} /></div>
         </div>
       ))}
     </div>
