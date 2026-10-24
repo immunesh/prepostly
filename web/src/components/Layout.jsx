@@ -74,7 +74,7 @@ export default function Layout() {
       <aside className="sidebar">
         <Link to="/app/dashboard" className="logo"><img src="/favicon.svg" alt="" /><span>Prepostly</span></Link>
         <Link to="/app/create" className="btn primary block" style={{ marginBottom: 6 }}>✨ Create</Link>
-        {NAV.map(([section, items]) => (
+        {[...NAV, ...(me.user.is_admin ? [['Admin', [['/app/admin', '🛡️', 'Admin dashboard']]]] : [])].map(([section, items]) => (
           <nav className="nav" key={section}>
             <div className="nav-section">{section}</div>
             {items.map(([to, ico, label]) => (

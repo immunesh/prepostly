@@ -3,6 +3,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { one, run } from './db.js';
 import { config } from './config.js';
+import { setMeter } from './usage.js';
 
 export const SESSION_COOKIE = 'cd_session';
 const SESSION_DAYS = 30;
@@ -110,17 +111,29 @@ export function userFromApiKey(req) {
 // ---------- middleware ----------
 export function requireUser(req, _res, next) {
   const user = userFromSession(req);
+  const viaKey = user ? null : userFromApiKey(req);
+  if ((user || viaKey?.user)?.suspended) return next(new HttpError(403, 'This account is suspended. Contact support.', 'suspended'));
   if (user) {
     req.user = user;
     return next();
   }
-  const viaKey = userFromApiKey(req);
   if (viaKey) {
     req.user = viaKey.user;
     req.apiBrandId = viaKey.brandId;
     return next();
   }
   next(new HttpError(401, 'Sign in to continue.'));
+}
+
+/** Site admins: flagged in the database, or listed in ADMIN_EMAILS. */
+export const isAdmin = (user) => Boolean(user && (user.is_admin || config.adminEmails.includes(user.email)));
+
+export function requireAdmin(req, res, next) {
+  requireUser(req, res, (err) => {
+    if (err) return next(err);
+    if (!isAdmin(req.user)) return next(new HttpError(403, 'Only site admins can open this page.'));
+    next();
+  });
 }
 
 /** The caller's role on a brand, or null. */
@@ -141,5 +154,7 @@ export function brandFor(req, min = 'reviewer') {
   if (!brand || !role) throw new HttpError(404, 'Brand not found.');
   if (!atLeast(role, min)) throw new HttpError(403, `This action needs the ${min} role or higher on ${brand.name}.`);
   req.role = role;
+  // API calls made for this request are billed to the brand owner, like its credits.
+  setMeter({ userId: brand.owner_id, brandId: brand.id });
   return brand;
 }

@@ -108,7 +108,7 @@ router.post('/ideas/conversations/:id/messages', async (req, res) => {
   try {
     if (llmAvailable()) {
       const history = all('SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at, rowid', c.id).slice(-30).map((m) => ({ role: m.role, content: m.content }));
-      for await (const ev of streamChat({ system: systemPrompt(brand), messages: history, signal: abort.signal })) {
+      for await (const ev of streamChat({ system: systemPrompt(brand), messages: history, feature: 'idea_lab', meterFields: { job: 'idea_lab', ref: c.id }, signal: abort.signal })) {
         if (ev.type === 'text') { reply += ev.text; send('delta', { text: ev.text }); }
       }
     } else {

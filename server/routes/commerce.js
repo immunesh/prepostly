@@ -5,6 +5,7 @@ import { CREDIT_COSTS, FORMATS } from '../catalog.js';
 import { charge } from '../credits.js';
 import { importProducts, productFromUrl } from '../engines/scraper.js';
 import { adConcepts } from '../engines/content.js';
+import { withMeter } from '../usage.js';
 import { createPost } from '../generate.js';
 import { normalizeUrl } from '../net.js';
 
@@ -93,7 +94,7 @@ router.post('/adstudio/concepts', async (req, res) => {
   if (!product) throw new HttpError(404, 'Pick a product first.');
   const count = Math.max(1, Math.min(6, Number(req.body.count) || 4));
   charge(brand, CREDIT_COSTS.ad_concepts, 'ad_concepts', product.id);
-  res.json({ concepts: await adConcepts(brand, productOut(product), count) });
+  res.json({ concepts: await withMeter({ job: 'ad_concepts', ref: product.id }, () => adConcepts(brand, productOut(product), count)) });
 });
 
 /** Generate one static ad per selected concept, plus an optional video ad. */

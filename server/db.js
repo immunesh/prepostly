@@ -312,6 +312,27 @@ CREATE TABLE IF NOT EXISTS usage_events (
   amount INTEGER NOT NULL DEFAULT 1,
   created_at ${TS}
 );
+-- Every paid API call (Claude, HeyGen, OpenAI images) with its tokens and estimated cost.
+-- user_id is the account that paid the credits; rows outlive deleted users so spend history stays whole.
+CREATE TABLE IF NOT EXISTS api_usage (
+  id TEXT PRIMARY KEY,
+  user_id TEXT,
+  brand_id TEXT,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL DEFAULT '',
+  feature TEXT NOT NULL,
+  job TEXT,
+  ref TEXT,
+  input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+  units REAL NOT NULL DEFAULT 0,
+  cost_usd REAL NOT NULL DEFAULT 0,
+  created_at ${TS}
+);
+CREATE INDEX IF NOT EXISTS api_usage_time ON api_usage(created_at);
+CREATE INDEX IF NOT EXISTS api_usage_user ON api_usage(user_id, created_at);
 CREATE TABLE IF NOT EXISTS api_keys (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -347,6 +368,9 @@ function addColumn(table, column, def) {
   if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
 }
 addColumn('autopilots', 'horizon_days', 'INTEGER NOT NULL DEFAULT 7');
+addColumn('users', 'is_admin', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('users', 'suspended', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('credit_ledger', 'note', 'TEXT');
 
 // ---------- query helpers ----------
 export const one = (sql, ...p) => db.prepare(sql).get(...p);

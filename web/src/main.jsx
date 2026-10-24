@@ -21,6 +21,7 @@ import Autopilot from './pages/Autopilot.jsx';
 import Brand from './pages/Brand.jsx';
 import Team from './pages/Team.jsx';
 import Account from './pages/Account.jsx';
+import Admin from './pages/Admin.jsx';
 import Share from './pages/Share.jsx';
 import { Privacy, Terms, DataDeletion } from './pages/Legal.jsx';
 
@@ -60,6 +61,7 @@ function App() {
         <Route path="brand" element={<Brand />} />
         <Route path="team" element={<Team />} />
         <Route path="account" element={<Account />} />
+        <Route path="admin" element={<Admin />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

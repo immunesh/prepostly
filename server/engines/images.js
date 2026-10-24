@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import ffmpegPath from 'ffmpeg-static';
 import { config } from '../config.js';
 import { safeFetch } from '../net.js';
+import { logApiUsage, openaiImageCost } from '../usage.js';
 
 const exec = promisify(execFile);
 const CACHE = path.join(config.dataDir, 'tmp', 'imgcache');
@@ -175,6 +176,7 @@ export async function generateAiImage(prompt, { size = '1024x1536', dir = 'ai' }
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error?.message || `Image generation failed (${r.status}).`);
+  logApiUsage({ provider: 'openai', model: config.openaiImageModel, feature: 'ai_image', input: j.usage?.input_tokens || 0, output: j.usage?.output_tokens || 0, units: 1, cost: openaiImageCost(j.usage) });
   const b64 = j.data?.[0]?.b64_json;
   let buf;
   if (b64) buf = Buffer.from(b64, 'base64');

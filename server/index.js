@@ -15,12 +15,14 @@ import { router as commerceRoutes } from './routes/commerce.js';
 import { router as autopilotRoutes } from './routes/autopilot.js';
 import { router as analyticsRoutes } from './routes/analytics.js';
 import { router as teamRoutes } from './routes/team.js';
+import { router as adminRoutes } from './routes/admin.js';
 import { router as publicRoutes, v1Router } from './routes/public.js';
 import { router as mcpRoutes } from './routes/mcp.js';
 import { router as legalRoutes } from './routes/legal.js';
 import { startScheduler } from './scheduler.js';
 import { resumePending } from './generate.js';
 import { writerName } from './engines/llm.js';
+import { meterRequests } from './usage.js';
 
 export function createApp() {
   const app = express();
@@ -32,6 +34,8 @@ export function createApp() {
     next();
   });
   app.use(express.json({ limit: '2mb' }));
+  // After body parsing, so each handler runs inside its own request's meter.
+  app.use(meterRequests);
 
   app.get('/healthz', (_req, res) => res.json({ ok: true, writer: writerName() }));
 
@@ -42,7 +46,7 @@ export function createApp() {
   app.use('/uploads', (_req, res, next) => { res.set('content-security-policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox"); next(); }, express.static(path.join(config.dataDir, 'uploads'), longCache));
   app.use('/outbox', (_req, res, next) => { res.set('content-security-policy', "default-src 'none'; sandbox"); next(); }, express.static(path.join(config.dataDir, 'outbox'), { fallthrough: false }));
 
-  const api = [authRoutes, brandRoutes, postRoutes, accountRoutes, publishRoutes, ideaRoutes, intelRoutes, commerceRoutes, autopilotRoutes, analyticsRoutes, teamRoutes];
+  const api = [authRoutes, brandRoutes, postRoutes, accountRoutes, publishRoutes, ideaRoutes, intelRoutes, commerceRoutes, autopilotRoutes, analyticsRoutes, teamRoutes, adminRoutes];
   app.use('/api', publicRoutes, ...api);
   // Developer REST API (API-key auth) exposes the same resources.
   app.use('/v1', v1Router, postRoutes, accountRoutes, publishRoutes, commerceRoutes);

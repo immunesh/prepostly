@@ -4,6 +4,7 @@ import { createPost } from '../generate.js';
 import { planTopics } from './content.js';
 import { zonedParts, zonedToUtc } from './besttime.js';
 import { notify } from '../notify.js';
+import { withMeter } from '../usage.js';
 
 // Auto posting: keeps the next week, two weeks or month of a brand's calendar filled with
 // generated posts at the chosen days and times, rotating post types and topics (or store
@@ -60,7 +61,7 @@ export async function runAutopilot(apId, { maxPosts = MAX_PER_RUN } = {}) {
     if (!products.length) return finish('Import products from your store first (Brand → Integrations).'), 0;
   }
   const direction = [ap.direction, ...ap.topics].filter(Boolean).join('; ');
-  const topics = ap.source === 'products' ? [] : await planTopics(brand, { direction, count: slots.length });
+  const topics = ap.source === 'products' ? [] : await withMeter({ userId: brand.owner_id, brandId: brand.id, job: 'autopilot', ref: ap.id }, () => planTopics(brand, { direction, count: slots.length }));
 
   const reviewers = all("SELECT user_id FROM brand_members WHERE brand_id = ? AND role IN ('owner','admin','reviewer')", brand.id).map((r) => r.user_id);
   let created = 0;

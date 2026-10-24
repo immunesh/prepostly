@@ -372,7 +372,7 @@ export async function writePost({ brand, type, prompt, language = 'English', ton
     concept && `Ad concept to follow: ${JSON.stringify(concept)}`,
     article && `Article "${article.title}":\n${article.text.slice(0, 12000)}`,
   ].filter(Boolean).join('\n\n');
-  const { json } = await completeJson({ system, prompt: parts, schema: POST_SCHEMA, effort: 'low' });
+  const { json } = await completeJson({ system, prompt: parts, schema: POST_SCHEMA, feature: 'write_post', effort: 'low' });
   return { ...normalize(json, type, n, brand, product), writer: 'claude' };
 }
 
@@ -412,6 +412,7 @@ export async function boostPrompt(brand, prompt, type) {
     return `${sentenceCase(prompt.trim())}${/[.!?]$/.test(prompt.trim()) ? '' : '.'} Speak to ${brand.audience || 'our audience'} in a ${String(brand.tone || 'friendly').toLowerCase()} voice, lead with a strong hook about ${t}, give specific, practical value, and end with a clear call to action${brand.cta ? ` (${brand.cta})` : ''}.`;
   }
   const { json } = await completeJson({
+    feature: 'boost_prompt',
     system: 'You rewrite short content requests into vivid, specific creative briefs for a social media post generator. Keep the user intent; add angle, audience, hook and specifics. Max 70 words.',
     prompt: `${brandBrief(brand)}\nPost type: ${POST_TYPES[type]?.label || type}\nOriginal request: ${prompt}`,
     schema: { type: 'object', properties: { prompt: { type: 'string' } }, required: ['prompt'], additionalProperties: false },
@@ -429,6 +430,7 @@ export async function rewriteCaption(brand, { caption, title, instruction, langu
     return [hook, ...(short ? middle.slice(0, 1) : middle), lines.at(-1)].filter(Boolean).join('\n\n');
   }
   const { json } = await completeJson({
+    feature: 'rewrite_caption',
     system: `You rewrite social media captions. Write in ${language}. Keep facts, keep it on-brand, no hashtags.`,
     prompt: `${brandBrief(brand)}\nInstruction: ${instruction || 'Make it more engaging with a stronger hook.'}\n\nCaption:\n${caption}`,
     schema: { type: 'object', properties: { caption: { type: 'string' } }, required: ['caption'], additionalProperties: false },
@@ -474,6 +476,7 @@ export async function adConcepts(brand, product, count = 4) {
     return all.slice(0, count);
   }
   const { json } = await completeJson({
+    feature: 'ad_concepts',
     system: 'You are a performance-marketing creative strategist. Produce distinct static-ad concepts. Use only facts in the product data; leave badge, offer and disclaimer empty when the data does not support them. Headlines max 8 words, CTAs max 3 words.',
     prompt: `${brandBrief(brand)}\nProduct data: ${JSON.stringify({ title: product.title, description: String(product.description || '').slice(0, 1500), price: product.price, compare_at_price: product.compare_at_price, currency: product.currency })}\nReturn exactly ${count} concepts.`,
     schema: CONCEPT_SCHEMA,
@@ -496,6 +499,7 @@ export async function planTopics(brand, { direction, count, products = [] }) {
     });
   }
   const { json } = await completeJson({
+    feature: 'plan_topics',
     system: 'You plan social media content calendars. Topics must be varied, specific and on-brand. Each topic is one sentence a copywriter can turn into a post.',
     prompt: `${brandBrief(brand)}\nContent direction: ${direction || 'mix of education, product and community'}\n${products.length ? `Products: ${products.slice(0, 20).map((p) => p.title).join('; ')}\n` : ''}Return exactly ${count} topics.`,
     schema: { type: 'object', properties: { topics: { type: 'array', items: { type: 'string' } } }, required: ['topics'], additionalProperties: false },
@@ -520,6 +524,7 @@ export async function themePosts(posts) {
     return top;
   }
   const { json } = await completeJson({
+    feature: 'competitor_themes',
     system: 'Group social media posts into 4-8 content themes (e.g. "Product launches", "Customer stories", "Tips & education"). Every post index must appear in exactly one theme.',
     prompt: posts.map((p, i) => `[${i}] (${p.media_type}) ${String(p.caption || '').slice(0, 300).replace(/\s+/g, ' ')}`).join('\n'),
     schema: { type: 'object', properties: { themes: { type: 'array', items: { type: 'object', properties: { theme: { type: 'string' }, indexes: { type: 'array', items: { type: 'integer' } } }, required: ['theme', 'indexes'], additionalProperties: false } } }, required: ['themes'], additionalProperties: false },

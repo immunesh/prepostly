@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { one, all, run, uuid, now, tx, json, deleteBrand } from '../db.js';
 import { config } from '../config.js';
-import { HttpError, hashPassword, verifyPassword, createSession, destroySession, requireUser, userFromSession } from '../auth.js';
+import { HttpError, hashPassword, verifyPassword, createSession, destroySession, requireUser, userFromSession, isAdmin } from '../auth.js';
 import { PLANS } from '../catalog.js';
 import { planStatus, refreshCredits } from '../credits.js';
 import { llmAvailable, writerName } from '../engines/llm.js';
@@ -45,6 +45,7 @@ router.post('/auth/signup', (req, res) => {
 router.post('/auth/login', (req, res) => {
   const user = one('SELECT * FROM users WHERE email = ?', String(req.body.email || '').trim().toLowerCase());
   if (!user || !verifyPassword(String(req.body.password || ''), user.password_hash)) throw new HttpError(401, 'Email or password is incorrect.');
+  if (user.suspended) throw new HttpError(403, 'This account is suspended. Contact support.', 'suspended');
   acceptPendingInvites(user);
   createSession(res, user.id);
   res.json({ ok: true });
@@ -72,7 +73,7 @@ router.get('/me', (req, res, next) => (userFromSession(req) ? requireUser(req, r
   // Credits are spent from the current brand owner's balance.
   const payer = current ? refreshCredits(current.owner_id) : user;
   res.json({
-    user: { id: user.id, name: user.name, email: user.email, created_at: user.created_at },
+    user: { id: user.id, name: user.name, email: user.email, created_at: user.created_at, is_admin: isAdmin(user) },
     plan: planStatus(user),
     credits: user.credits,
     brand_credits: payer.credits,

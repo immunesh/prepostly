@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
 import { safeFetch } from '../net.js';
+import { logApiUsage, heygenCost } from '../usage.js';
 
 // UGC avatar videos through HeyGen: send the script with an avatar and a voice, poll until
 // the render finishes, then download the MP4 (and its thumbnail) into the post's media folder.
@@ -94,6 +95,9 @@ export async function renderAvatarVideo({ dir, script, w, h, background, languag
   const video = path.join(dir, 'avatar-src.mp4');
   fs.writeFileSync(video, (await safeFetch(d.video_url, { accept: 'video/*', maxBytes: 500 * 1024 * 1024, timeoutMs: 5 * 60 * 1000 })).buffer);
   fs.rmSync(job, { force: true });
+  // HeyGen bills by rendered minutes; logged once the video is safely downloaded.
+  const seconds = Number(d.duration) || 0;
+  logApiUsage({ provider: 'heygen', model: 'avatar_video', feature: 'avatar_video', units: seconds, cost: heygenCost(seconds) });
   let thumb = null;
   if (d.thumbnail_url) {
     const t = await safeFetch(d.thumbnail_url, { accept: 'image/*', maxBytes: 15 * 1024 * 1024 }).catch(() => null);

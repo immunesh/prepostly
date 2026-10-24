@@ -51,6 +51,13 @@ export const config = {
   legalName: env('LEGAL_NAME', 'Prepostly'),
   supportEmail: env('SUPPORT_EMAIL', ''),
 
+  // Site admins (comma-separated emails). They see the admin dashboard at /app/admin.
+  adminEmails: env('ADMIN_EMAILS').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean),
+  // API prices for the admin cost reports (USD). Claude prices are built in (server/usage.js).
+  heygenUsdPerMinute: Number(env('HEYGEN_USD_PER_MINUTE', 1)),
+  // Flat price per AI image. Empty prices each image from the token usage OpenAI reports.
+  openaiImageUsd: env('OPENAI_IMAGE_USD') === '' ? null : Number(env('OPENAI_IMAGE_USD')),
+
   // Billing: 'manual' lets account owners switch plans without payment (self-hosted).
   billingMode: env('BILLING_MODE', 'manual'),
 

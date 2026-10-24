@@ -13,6 +13,7 @@ import { composeVideo, fitVideo, probeDuration, extractFrame, sceneStarts, XFADE
 import { avatarAvailable, renderAvatarVideo } from './engines/avatar.js';
 import { synthesize, writeWav, SAMPLE_RATE } from './engines/tts.js';
 import { notify } from './notify.js';
+import { withMeter } from './usage.js';
 
 // ---------------------------------------------------------------- job queue
 const MAX_CONCURRENT = Number(process.env.GENERATION_CONCURRENCY || 2);
@@ -119,7 +120,13 @@ async function generate(id) {
   const post = getPost(id);
   if (!post || post.status !== 'generating') return;
   const brand = one('SELECT * FROM brands WHERE id = ?', post.brand_id);
-  const input = post.input;
+  if (!brand) return;
+  // API costs of this run belong to the post's credit charge (see the admin usage report).
+  return withMeter({ userId: brand.owner_id, brandId: brand.id, job: `generate:${post.type}`, ref: id }, () => runGeneration(post, brand));
+}
+
+async function runGeneration(post, brand) {
+  const { id, input } = post;
   try {
     let prompt = input.prompt;
     if (input.boost && prompt) prompt = await boostPrompt(brand, prompt, post.type);

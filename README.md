@@ -85,6 +85,18 @@ For app review, give each platform these URLs: `{PUBLIC_URL}/privacy`, `{PUBLIC_
 
 TikTok only lets apps that pass its audit post publicly; until then, posts are private (`SELF_ONLY`) and Prepostly says so.
 
+## Admin dashboard
+
+Site admins get an **Admin dashboard** link in the sidebar (`/app/admin`). Put your email in `ADMIN_EMAILS` (comma-separated) in `.env` and restart; admins can then grant admin access to others from the dashboard.
+
+- **Overview**: users, signups, active users, plans, posts, publishing, credits used and API spend per day.
+- **Users**: search and sort every account; add or remove credits with a note, change plan, suspend (signs them out and blocks API keys), make admin, create or delete accounts.
+- **API usage**: every Claude, HeyGen and OpenAI call with tokens and dollar cost, by model, feature and user.
+- **Credit ledger**: every credit charge, refund and grant, with who made admin changes.
+- **Credit pricing**: what one credit costs in API fees (measured from real calls, and estimated per action), against revenue per credit on each plan.
+
+Claude costs use built-in list prices per model. Set `HEYGEN_USD_PER_MINUTE` (default 1) and `OPENAI_IMAGE_USD` (empty prices images from token usage) to match your contracts. Calls are recorded from the moment this version runs; earlier spend is not known.
+
 ## MCP (use Prepostly from Claude)
 
 Create an API key in **Plan & account → API & MCP**, then:

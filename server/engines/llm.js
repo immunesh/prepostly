@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config.js';
 import { HttpError } from '../auth.js';
+import { logApiUsage, claudeCost } from '../usage.js';
 
 // Claude access for copywriting, analysis and the Idea Lab chat. When no Anthropic
 // credentials are configured, callers fall back to the built-in offline writer.
@@ -19,8 +20,19 @@ function withFallback(params) {
   return SUPPORTS_FALLBACK.test(params.model) ? { ...params, ...FALLBACK } : params;
 }
 
-/** One request that returns JSON matching `schema` (structured outputs). */
-export async function completeJson({ system, prompt, schema, effort = 'low', maxTokens = 16000, images = [], signal }) {
+/** Log a finished call's tokens and cost. Returns { input, output } for callers. */
+function meter(feature, message, fields) {
+  const u = message.usage || {};
+  const usage = { input: u.input_tokens || 0, output: u.output_tokens || 0, cacheRead: u.cache_read_input_tokens || 0, cacheWrite: u.cache_creation_input_tokens || 0 };
+  logApiUsage({ provider: 'anthropic', model: message.model, feature, ...usage, cost: claudeCost(message.model || '', usage), ...fields });
+  return { input: usage.input, output: usage.output };
+}
+
+/**
+ * One request that returns JSON matching `schema` (structured outputs).
+ * `feature` names the call in the admin usage reports.
+ */
+export async function completeJson({ system, prompt, schema, feature = 'other', effort = 'low', maxTokens = 16000, images = [], signal }) {
   if (!llmAvailable()) throw new HttpError(503, 'No language model is configured.');
   const content = [
     ...images.map((img) => ({ type: 'image', source: img.url ? { type: 'url', url: img.url } : { type: 'base64', media_type: img.mime, data: img.data } })),
@@ -40,17 +52,18 @@ export async function completeJson({ system, prompt, schema, effort = 'low', max
   } catch (e) {
     throw describeApiError(e);
   }
+  const usage = meter(feature, response);
   if (response.stop_reason === 'refusal') throw new HttpError(422, 'The model declined this request. Try rephrasing your prompt.');
   if (response.stop_reason === 'max_tokens') throw new HttpError(502, 'The model response was cut off. Try a shorter request.');
   const text = response.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
-  return { json: JSON.parse(text), usage: { input: response.usage.input_tokens, output: response.usage.output_tokens }, model: response.model };
+  return { json: JSON.parse(text), usage, model: response.model };
 }
 
 /**
  * Stream a chat reply. Yields { type: 'text', text } deltas, then
  * { type: 'done', text, usage }.
  */
-export async function* streamChat({ system, messages, effort = 'low', maxTokens = 16000, signal }) {
+export async function* streamChat({ system, messages, feature = 'chat', meterFields, effort = 'low', maxTokens = 16000, signal }) {
   if (!llmAvailable()) throw new HttpError(503, 'No language model is configured.');
   const params = withFallback({ model: config.anthropicModel, max_tokens: maxTokens, system, output_config: { effort }, messages });
   const api = SUPPORTS_FALLBACK.test(params.model) ? anthropic().beta.messages : anthropic().messages;
@@ -64,7 +77,7 @@ export async function* streamChat({ system, messages, effort = 'low', maxTokens 
     throw describeApiError(e);
   }
   const message = await stream.finalMessage();
-  const usage = { input: message.usage.input_tokens, output: message.usage.output_tokens };
+  const usage = meter(feature, message, meterFields);
   if (message.stop_reason === 'refusal') {
     const text = "I can't help with that one. Try asking a different way.";
     yield { type: 'text', text };
