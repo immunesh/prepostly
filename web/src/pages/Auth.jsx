@@ -14,7 +14,7 @@ function Shell({ children }) {
           <h2>Create a month of on-brand content in an afternoon.</h2>
           <p style={{ opacity: 0.8, marginTop: 14, fontSize: 16, lineHeight: 1.6 }}>Posts, carousels, videos and ads from one prompt. Scheduled and published to every channel.</p>
         </div>
-        <p style={{ opacity: 0.6 }} className="small">Instagram · Facebook · LinkedIn · X · TikTok · YouTube · Pinterest · Threads · Google Business · Bluesky · Mastodon · Telegram</p>
+        <p style={{ opacity: 0.6 }} className="small">Instagram · Facebook · LinkedIn · X · TikTok · YouTube · Pinterest · Threads · Google Business · Blogger · Tumblr · Bluesky · Mastodon · Telegram · Discord · Slack</p>
       </div>
       <div className="auth-form">{children}<LegalLinks /></div>
     </div>

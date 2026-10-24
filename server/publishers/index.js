@@ -5,12 +5,13 @@ import { facebook, instagram, threads } from './meta.js';
 import { linkedin, linkedin_page } from './linkedin.js';
 import { x } from './x.js';
 import { pinterest } from './pinterest.js';
-import { youtube, google_business } from './google.js';
+import { youtube, google_business, blogger } from './google.js';
+import { tumblr } from './tumblr.js';
 import { tiktok } from './tiktok.js';
-import { bluesky, mastodon, telegram, sandbox } from './token.js';
+import { bluesky, mastodon, telegram, discord, slack, sandbox } from './token.js';
 import { PublishError, postMedia } from './common.js';
 
-export const ADAPTERS = { facebook, instagram, threads, linkedin, linkedin_page, x, pinterest, youtube, tiktok, google_business, bluesky, mastodon, telegram, sandbox };
+export const ADAPTERS = { facebook, instagram, threads, linkedin, linkedin_page, x, pinterest, youtube, tiktok, google_business, blogger, tumblr, bluesky, mastodon, telegram, discord, slack, sandbox };
 
 export function adapter(platform) {
   const a = ADAPTERS[platform];

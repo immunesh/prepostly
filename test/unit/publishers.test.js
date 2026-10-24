@@ -320,3 +320,72 @@ describe('Bluesky, Mastodon, Telegram', () => {
     assert.equal(items[2].media, 'attach://f2');
   });
 });
+
+describe('Discord, Slack, Blogger, Tumblr', () => {
+  const hook = 'https://discord.com/api/webhooks/123/abc-DEF';
+
+  test('Discord: connect only accepts Discord webhook URLs', async () => {
+    await assert.rejects(A.discord.connect({ webhookUrl: 'http://169.254.169.254/api/webhooks/1/x' }), /Discord webhook URL/);
+    mock = mockFetch([{ match: (u) => u === hook, reply: () => json({ id: '123', name: 'Prepostly', guild_id: 'G', channel_id: 'C', avatar: null }) }]);
+    const [acc] = await A.discord.connect({ webhookUrl: `${hook}?thread_id=1` });
+    assert.equal(acc.access_token, hook);
+    assert.deepEqual(acc.meta, { guild_id: 'G', channel_id: 'C' });
+  });
+
+  test('Discord: files and payload_json in one multipart request', async () => {
+    mock = mockFetch([{ match: (u) => u === `${hook}?wait=true`, reply: () => json({ id: 'M1' }) }]);
+    const r = await A.discord.publish({ account: { access_token: hook, meta: { guild_id: 'G', channel_id: 'C' } }, media: media(2), caption: 'Fresh roast', hashtags: '#coffee' });
+    assert.equal(r.url, 'https://discord.com/channels/G/C/M1');
+    const fd = mock.calls[0].body;
+    assert.equal(JSON.parse(fd.get('payload_json')).content, 'Fresh roast\n\n#coffee');
+    assert.ok(fd.get('files[1]'));
+  });
+
+  test('Discord: files over 10 MB fail before upload', async () => {
+    await assert.rejects(A.discord.publish({ account: { access_token: hook, meta: {} }, media: [{ ...video[0], size: 30 * 1048576 }], caption: 'x', hashtags: '' }), /up to 10 MB/);
+  });
+
+  test('Slack: connect probes the webhook with an empty message', async () => {
+    const url = 'https://hooks.slack.com/services/T1/B1/secret';
+    mock = mockFetch([{ match: (u) => u === url, reply: () => ({ status: 400, body: 'no_text', headers: { 'content-type': 'text/plain' } }) }]);
+    const [acc] = await A.slack.connect({ webhookUrl: url, name: '#news' });
+    assert.equal(acc.name, '#news');
+    assert.ok(!acc.external_id.includes('secret'));
+    mock.restore();
+    mock = mockFetch([{ match: (u) => u === url, reply: () => ({ status: 403, body: 'invalid_token', headers: { 'content-type': 'text/plain' } }) }]);
+    await assert.rejects(A.slack.connect({ webhookUrl: url }), /did not accept/);
+    await assert.rejects(A.slack.connect({ webhookUrl: 'https://example.com/hook' }), /incoming webhook URL/);
+  });
+
+  test('Slack: images become image blocks with public URLs', async () => {
+    mock = mockFetch([{ match: (u) => u.startsWith('https://hooks.slack.com/'), reply: () => ({ body: 'ok', headers: { 'content-type': 'text/plain' } }) }]);
+    await A.slack.publish({ account: { access_token: 'https://hooks.slack.com/services/T/B/x' }, media: media(2), caption: 'Hi team', hashtags: '' });
+    const body = JSON.parse(mock.calls[0].body);
+    assert.equal(body.blocks[0].text.text, 'Hi team');
+    assert.equal(body.blocks[2].image_url, 'https://prepostly.example.com/media/p/v1-2.png');
+  });
+
+  test('Blogger: post with embedded images, escaped HTML and labels', async () => {
+    const { bloggerHtml } = await import('../../server/publishers/google.js');
+    assert.equal(bloggerHtml('A <b>\nline\n\nSee https://x.co'), '<p>A &lt;b&gt;<br>line</p>\n<p>See <a href="https://x.co">https://x.co</a></p>');
+    mock = mockFetch([{ match: (u) => u.endsWith('/blogs/B1/posts/'), reply: () => json({ id: 'P1', url: 'https://brewly.blogspot.com/p1.html' }) }]);
+    const r = await A.blogger.publish({ account: { external_id: 'B1', access_token: 't' }, media: media(1), caption: 'Our new blend', hashtags: '#coffee #roast', title: 'New blend' });
+    assert.equal(r.url, 'https://brewly.blogspot.com/p1.html');
+    const body = JSON.parse(mock.calls[0].body);
+    assert.equal(body.title, 'New blend');
+    assert.deepEqual(body.labels, ['coffee', 'roast']);
+    assert.match(body.content, /<img src="https:\/\/prepostly\.example\.com\/media\/p\/v1-1\.png"/);
+  });
+
+  test('Tumblr: NPF post with media identifiers and tags', async () => {
+    mock = mockFetch([{ match: (u) => u.endsWith('/blog/UUID/posts'), reply: () => json({ response: { id: '7000000000000000001', state: 'published' } }) }]);
+    const r = await A.tumblr.publish({ account: { external_id: 'UUID', username: 'brewly', access_token: 't' }, media: media(2), caption: 'First\n\nSecond', hashtags: '#coffee #beans' });
+    assert.equal(r.url, 'https://www.tumblr.com/brewly/7000000000000000001');
+    const fd = mock.calls[0].body;
+    const post = JSON.parse(fd.get('json'));
+    assert.deepEqual(post.content.map((b) => b.type), ['image', 'image', 'text', 'text']);
+    assert.equal(post.content[1].media[0].identifier, 'f1');
+    assert.equal(post.tags, 'coffee,beans');
+    assert.ok(fd.get('f1'));
+  });
+});

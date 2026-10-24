@@ -87,3 +87,45 @@ export const google_business = {
     return { external_id: r.name, url: r.searchUrl || null };
   },
 };
+
+// Blogger API v3. It can't upload images, so posts embed slides by their PUBLIC_URL.
+const BLOGGER = 'https://www.googleapis.com/blogger/v3';
+const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** Caption as HTML paragraphs with clickable links. */
+export function bloggerHtml(caption) {
+  return String(caption || '').trim().split(/\n\s*\n/).filter(Boolean)
+    .map((p) => `<p>${escapeHtml(p).replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${u}">${u}</a>`).replace(/\n/g, '<br>')}</p>`).join('\n');
+}
+
+export const blogger = {
+  id: 'blogger',
+  configured,
+  authUrl: googleAuthUrl(['https://www.googleapis.com/auth/blogger']),
+  async exchange({ code, redirectUri }) {
+    const t = await googleToken({ grant_type: 'authorization_code', code, redirect_uri: redirectUri });
+    const blogs = (await api('Blogger', `${BLOGGER}/users/self/blogs`, { headers: auth(t.access_token) })).body.items || [];
+    if (!blogs.length) throw new PublishError('This Google account has no Blogger blogs. Create one at blogger.com first.');
+    return blogs.map((b) => ({ external_id: b.id, name: b.name, username: new URL(b.url).hostname, avatar: null, access_token: t.access_token, refresh_token: t.refresh_token, token_expires_at: new Date(Date.now() + t.expires_in * 1000).toISOString(), meta: { url: b.url } }));
+  },
+  refresh: googleRefresh,
+  async publish({ account, media, caption, hashtags, options, title }) {
+    const images = media.filter((m) => m.kind === 'image');
+    if (images.length) requirePublicUrl('Blogger');
+    const alt = escapeHtml(caption.split('\n')[0].slice(0, 200));
+    const content = [...images.map((m) => `<p><img src="${publicUrl(m.path)}" alt="${alt}" width="${m.w || ''}" height="${m.h || ''}" style="max-width:100%;height:auto"></p>`), bloggerHtml(caption)].join('\n');
+    // Blogger caps a post's labels at 200 characters in total.
+    const labels = [];
+    for (const tag of String(hashtags || '').split(/\s+/).map((t) => t.replace(/^#/, '')).filter(Boolean)) {
+      if ([...labels, tag].join(',').length > 200) break;
+      labels.push(tag);
+    }
+    const body = { kind: 'blogger#post', title: (options?.title || title || caption.split('\n')[0] || 'New post').slice(0, 200), content, labels };
+    const r = (await api('Blogger', `${BLOGGER}/blogs/${account.external_id}/posts/`, { method: 'POST', headers: auth(account.access_token), json: body })).body;
+    return { external_id: r.id, url: r.url };
+  },
+  async metrics({ account, externalId }) {
+    const r = (await api('Blogger', `${BLOGGER}/blogs/${account.external_id}/posts/${externalId}?fields=replies`, { headers: auth(account.access_token) })).body;
+    return { comments: Number(r.replies?.totalItems || 0) };
+  },
+};

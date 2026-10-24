@@ -64,9 +64,13 @@ export const PLATFORMS = {
   youtube: { label: 'YouTube (Shorts)', auth: 'oauth', media: ['video'] },
   tiktok: { label: 'TikTok', auth: 'oauth', media: ['carousel', 'image', 'video'], publicMedia: true },
   google_business: { label: 'Google Business Profile', auth: 'oauth', media: ['image', 'text'], publicMedia: true },
+  blogger: { label: 'Blogger', auth: 'oauth', media: ['image', 'carousel', 'text'], publicMedia: true },
+  tumblr: { label: 'Tumblr', auth: 'oauth', media: ['image', 'carousel', 'video', 'text'] },
   bluesky: { label: 'Bluesky', auth: 'token', media: ['image', 'carousel', 'text'], fields: [{ key: 'identifier', label: 'Handle (e.g. you.bsky.social)' }, { key: 'password', label: 'App password', secret: true }] },
   mastodon: { label: 'Mastodon', auth: 'token', media: ['image', 'carousel', 'video', 'text'], fields: [{ key: 'instance', label: 'Instance URL (e.g. https://mastodon.social)' }, { key: 'token', label: 'Access token (write:statuses, write:media)', secret: true }] },
   telegram: { label: 'Telegram channel', auth: 'token', media: ['image', 'carousel', 'video', 'text'], fields: [{ key: 'botToken', label: 'Bot token', secret: true }, { key: 'chatId', label: 'Channel (@name or numeric id)' }] },
+  discord: { label: 'Discord channel', auth: 'token', media: ['image', 'carousel', 'video', 'text'], fields: [{ key: 'webhookUrl', label: 'Webhook URL (Channel settings → Integrations → Webhooks)', secret: true }] },
+  slack: { label: 'Slack channel', auth: 'token', media: ['image', 'carousel', 'text'], fields: [{ key: 'webhookUrl', label: 'Incoming webhook URL (https://hooks.slack.com/…)', secret: true }, { key: 'name', label: 'Channel name (e.g. #announcements)' }] },
   sandbox: { label: 'Sandbox (test channel)', auth: 'token', media: ['image', 'carousel', 'video', 'text'], fields: [{ key: 'name', label: 'Channel name' }] },
 };
 

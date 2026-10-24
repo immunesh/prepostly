@@ -28,7 +28,7 @@ router.get('/accounts', (req, res) => {
   res.json(all('SELECT * FROM social_accounts WHERE brand_id = ? ORDER BY platform, name', brand.id).map(publicAccount));
 });
 
-/** Connect a token-based channel (Bluesky, Mastodon, Telegram, Sandbox). */
+/** Connect a token-based channel (Bluesky, Mastodon, Telegram, Discord, Slack, Sandbox). */
 router.post('/accounts/connect/:platform', async (req, res) => {
   const brand = brandFor(req, 'admin');
   const { platform } = req.params;

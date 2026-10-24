@@ -4,7 +4,7 @@ import { get, post, toLocalInput, fmtDate, PLATFORM_ICON } from '../lib/api.js';
 import { useApp, useLoad } from '../lib/app.jsx';
 import { Modal, Spinner, Switch, Avatar } from './ui.jsx';
 
-const LIMITS = { x: 280, bluesky: 300, threads: 500, mastodon: 500, instagram: 2200, linkedin: 3000, linkedin_page: 3000, tiktok: 2200, google_business: 1500, telegram: 1024, pinterest: 800 };
+const LIMITS = { x: 280, bluesky: 300, threads: 500, mastodon: 500, instagram: 2200, linkedin: 3000, linkedin_page: 3000, tiktok: 2200, google_business: 1500, telegram: 1024, discord: 2000, slack: 3000, pinterest: 800 };
 
 /** Publish now, schedule, send for approval, or save as draft. */
 export default function PublishDialog({ postData, onClose, onDone, initialTime }) {

@@ -68,9 +68,13 @@ Voiceover runs on-device with Kokoro (no key). The first narrated video download
 | YouTube | OAuth (Google) | Shorts and videos |
 | TikTok | OAuth | video (direct post), photo carousels |
 | Google Business Profile | OAuth (Google) | image, text |
+| Blogger | OAuth (Google) | images, text; images are embedded from `PUBLIC_URL` |
+| Tumblr | OAuth | up to 10 images, video, text; hashtags become tags |
 | Bluesky | App password | up to 4 images, text |
 | Mastodon | Access token | images, video, text |
 | Telegram channel | Bot token | photo, album, video, text |
+| Discord channel | Webhook URL | up to 10 images, video (10 MB max), text |
+| Slack channel | Incoming webhook URL | images (from `PUBLIC_URL`), text |
 | Sandbox | — | everything; writes to `data/outbox` for testing |
 
 ### Connecting platforms for your users
@@ -105,7 +109,7 @@ curl -X POST http://127.0.0.1:4100/v1/publish ...    # {post_id, account_ids, mo
 ## Testing
 
 ```bash
-npm test             # 109 unit + integration tests (offline, isolated temp data dir)
+npm test             # 116 unit + integration tests (offline, isolated temp data dir)
 npm run build && npm run test:e2e   # 6 browser tests in Chrome (set CHROME_PATH if needed)
 ```
 

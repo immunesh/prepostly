@@ -66,6 +66,8 @@ export const config = {
     pinterest: { clientId: env('PINTEREST_APP_ID'), clientSecret: env('PINTEREST_APP_SECRET') },
     youtube: { clientId: env('GOOGLE_CLIENT_ID'), clientSecret: env('GOOGLE_CLIENT_SECRET') },
     google_business: { clientId: env('GOOGLE_CLIENT_ID'), clientSecret: env('GOOGLE_CLIENT_SECRET') },
+    blogger: { clientId: env('GOOGLE_CLIENT_ID'), clientSecret: env('GOOGLE_CLIENT_SECRET') },
+    tumblr: { clientId: env('TUMBLR_CLIENT_ID'), clientSecret: env('TUMBLR_CLIENT_SECRET') },
     tiktok: { clientId: env('TIKTOK_CLIENT_KEY'), clientSecret: env('TIKTOK_CLIENT_SECRET') },
   },
 };

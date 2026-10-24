@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { config } from '../config.js';
-import { api, PublishError, sleep, composeText, fileBlob, asJpeg } from './common.js';
+import { api, PublishError, sleep, composeText, fileBlob, asJpeg, publicUrl, requirePublicUrl } from './common.js';
 
 // Channels connected with a token or app password instead of OAuth.
 
@@ -153,6 +154,64 @@ export const telegram = {
   },
   async followers({ account }) {
     return (await api('Telegram', `${TG(account.access_token)}/getChatMemberCount?chat_id=${encodeURIComponent(account.external_id)}`)).body.result ?? null;
+  },
+};
+
+// ---------------------------------------------------------------- Discord (channel webhook)
+// Only Discord's own webhook URLs are accepted, so the server never fetches an arbitrary address.
+const DISCORD_HOOK = /^https:\/\/(?:(?:canary|ptb)\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/;
+const DISCORD_FILE_LIMIT = 10 * 1024 * 1024;
+
+export const discord = {
+  id: 'discord',
+  configured: () => true,
+  async connect({ webhookUrl }) {
+    const url = String(webhookUrl || '').trim().replace(/\?.*$/, '');
+    if (!DISCORD_HOOK.test(url)) throw new PublishError('Paste a Discord webhook URL (Channel settings → Integrations → Webhooks → Copy Webhook URL).');
+    const hook = (await api('Discord', url)).body;
+    return [{ external_id: hook.id, name: hook.name || 'Discord channel', username: '', avatar: hook.avatar ? `https://cdn.discordapp.com/avatars/${hook.id}/${hook.avatar}.png` : null, access_token: url, meta: { guild_id: hook.guild_id, channel_id: hook.channel_id } }];
+  },
+  async publish({ account, media, caption, hashtags }) {
+    const files = media.slice(0, 10);
+    const big = files.find((m) => m.size > DISCORD_FILE_LIMIT);
+    if (big) throw new PublishError(`Discord webhooks accept files up to 10 MB; this ${big.kind} is ${Math.ceil(big.size / 1048576)} MB.`);
+    const fd = new FormData();
+    fd.set('payload_json', JSON.stringify({ content: composeText(caption, hashtags, 2000), attachments: files.map((m, i) => ({ id: i, filename: m.kind === 'video' ? 'video.mp4' : `image${i + 1}.png` })) }));
+    files.forEach((m, i) => fd.set(`files[${i}]`, fileBlob(m.file, m.mime), m.kind === 'video' ? 'video.mp4' : `image${i + 1}.png`));
+    const msg = (await api('Discord', `${account.access_token}?wait=true`, { method: 'POST', form: fd, timeoutMs: 300000 })).body;
+    const { guild_id: guild, channel_id: channel } = account.meta || {};
+    return { external_id: msg.id, url: guild && channel ? `https://discord.com/channels/${guild}/${channel}/${msg.id}` : null };
+  },
+};
+
+// ---------------------------------------------------------------- Slack (incoming webhook)
+// Incoming webhooks can't upload files, so images go in as image blocks that Slack fetches from PUBLIC_URL.
+const SLACK_HOOK = /^https:\/\/hooks\.slack\.com\/(?:services|triggers|workflows)\/[\w/-]+$/;
+
+export const slack = {
+  id: 'slack',
+  configured: () => true,
+  async connect({ webhookUrl, name }) {
+    const url = String(webhookUrl || '').trim();
+    if (!SLACK_HOOK.test(url)) throw new PublishError('Paste a Slack incoming webhook URL (api.slack.com/apps → your app → Incoming Webhooks → Add New Webhook).');
+    // An empty message is rejected with "no_text" by a live webhook and with 403/404 by a revoked one, so nothing gets posted.
+    try {
+      await api('Slack', url, { method: 'POST', json: {} });
+    } catch (e) {
+      if (!(e.status === 400 && /no_text|missing_text/.test(e.message))) throw new PublishError(`Slack did not accept that webhook (${e.message.replace(/^Slack: /, '')}).`);
+    }
+    const label = String(name || '').trim().slice(0, 60) || 'Slack channel';
+    return [{ external_id: `hook-${crypto.createHash('sha256').update(url).digest('hex').slice(0, 16)}`, name: label, username: label.replace(/^#/, ''), avatar: null, access_token: url, meta: {} }];
+  },
+  async publish({ account, media, caption, hashtags }) {
+    const text = composeText(caption, hashtags, 3000);
+    const blocks = [{ type: 'section', text: { type: 'mrkdwn', text } }];
+    const images = media.filter((m) => m.kind === 'image').slice(0, 10);
+    if (images.length) requirePublicUrl('Slack');
+    for (const m of images) blocks.push({ type: 'image', image_url: publicUrl(m.path), alt_text: caption.split('\n')[0].slice(0, 200) || 'Image' });
+    await api('Slack', account.access_token, { method: 'POST', json: { text, blocks } });
+    // Webhooks reply with a bare "ok": there is no message id or link to keep.
+    return { external_id: null, url: null };
   },
 };
 
