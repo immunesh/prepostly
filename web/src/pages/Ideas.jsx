@@ -20,10 +20,14 @@ export default function Ideas() {
   const [busy, setBusy] = useState(false);
   const end = useRef(null);
 
-  useEffect(() => {
-    if (!active) return setMessages([]);
-    get(`/api/ideas/conversations/${active}`).then((c) => setMessages(c.messages)).catch((e) => toast(e.message, 'err'));
-  }, [active, toast]);
+  // Load history only when the user picks a conversation. Loading on every change of `active`
+  // raced the first reply in a new chat and wiped it from the screen.
+  const open = (id) => {
+    if (busy) return;
+    setActive(id);
+    setMessages([]);
+    if (id) get(`/api/ideas/conversations/${id}`).then((c) => setMessages(c.messages)).catch((e) => toast(e.message, 'err'));
+  };
   useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const send = async (text) => {
@@ -38,10 +42,12 @@ export default function Ideas() {
         setActive(id);
       }
       setMessages((m) => [...m, { id: `u${Date.now()}`, role: 'user', content }, { id: 'stream', role: 'assistant', content: '' }]);
+      let failed = null;
       await streamPost(`/api/ideas/conversations/${id}/messages`, { content }, (ev, data) => {
         if (ev === 'delta') setMessages((m) => m.map((x) => (x.id === 'stream' ? { ...x, content: x.content + data.text } : x)));
-        if (ev === 'error') toast(data.error, 'err');
+        if (ev === 'error') failed = data.error;
       });
+      if (failed) throw new Error(failed);
       setMessages((m) => m.map((x) => (x.id === 'stream' ? { ...x, id: `a${Date.now()}` } : x)));
       reload();
       refresh();
@@ -58,14 +64,14 @@ export default function Ideas() {
       <div className="page-head"><div><h1>💡 Idea Lab</h1><p>Brainstorm posts, calendars and ad copy with an AI that knows your brand.</p></div></div>
       <div className="chat">
         <div className="card chat-list" style={{ padding: 10 }}>
-          <button className="btn primary block" style={{ marginBottom: 8 }} onClick={() => setActive(null)}>＋ New conversation</button>
+          <button className="btn primary block" style={{ marginBottom: 8 }} disabled={busy} onClick={() => open(null)}>＋ New conversation</button>
           {(convs || []).map((c) => (
             <div key={c.id} className="row" style={{ gap: 2 }}>
-              <button className={active === c.id ? 'on' : ''} onClick={() => setActive(c.id)} style={{ flex: 1, minWidth: 0 }}><span className="clip" style={{ display: 'block' }}>{c.title}</span><span className="tiny faint">{c.words} words</span></button>
+              <button className={active === c.id ? 'on' : ''} onClick={() => open(c.id)} style={{ flex: 1, minWidth: 0 }}><span className="clip" style={{ display: 'block' }}>{c.title}</span><span className="tiny faint">{c.words} words</span></button>
               <Dropdown trigger={<button className="btn ghost sm icon-btn" aria-label="Conversation options">⋯</button>}>
                 <button onClick={async () => { const t = prompt('Conversation title', c.title); if (t) { await patch(`/api/ideas/conversations/${c.id}`, { title: t }); reload(); } }}>✏️ Rename</button>
                 <button onClick={async () => { await post(`/api/ideas/conversations/${c.id}/clear`); if (active === c.id) setMessages([]); }}>🧹 Clear history</button>
-                <button onClick={async () => { await del(`/api/ideas/conversations/${c.id}`); if (active === c.id) setActive(null); reload(); }}>🗑️ Delete chat</button>
+                <button onClick={async () => { await del(`/api/ideas/conversations/${c.id}`); if (active === c.id) open(null); reload(); }}>🗑️ Delete chat</button>
               </Dropdown>
             </div>
           ))}

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { one, all, run, uuid, now, insert } from '../db.js';
 import { HttpError, requireUser, brandFor } from '../auth.js';
 import { CREDIT_COSTS } from '../catalog.js';
-import { charge } from '../credits.js';
+import { charge, refund } from '../credits.js';
 import { llmAvailable, streamChat } from '../engines/llm.js';
 import { planTopics, topicOf, keywords, titleCase, upcomingSpecialDays } from '../engines/content.js';
 
@@ -97,7 +97,7 @@ router.post('/ideas/conversations/:id/messages', async (req, res) => {
   const content = String(req.body.content || '').trim().slice(0, 4000);
   if (!content) throw new HttpError(400, 'Type a message.');
   charge(brand, CREDIT_COSTS.chat_message, 'idea_lab', c.id);
-  insert('messages', { id: uuid(), conversation_id: c.id, role: 'user', content });
+  const question = insert('messages', { id: uuid(), conversation_id: c.id, role: 'user', content }).id;
   if (c.title === 'New conversation') run('UPDATE conversations SET title = ? WHERE id = ?', content.slice(0, 60), c.id);
 
   res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive', 'x-accel-buffering': 'no' });
@@ -119,6 +119,9 @@ router.post('/ideas/conversations/:id/messages', async (req, res) => {
     run('UPDATE conversations SET words = words + ?, updated_at = ? WHERE id = ?', words(content) + words(reply), now(), c.id);
     send('done', { ok: true });
   } catch (e) {
+    // No reply was saved, so the message is free; drop it so the history stays question/answer pairs.
+    refund(brand, CREDIT_COSTS.chat_message, 'idea_lab', c.id);
+    run('DELETE FROM messages WHERE id = ?', question);
     if (!abort.signal.aborted) send('error', { error: e.message });
   }
   res.end();

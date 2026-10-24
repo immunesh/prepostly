@@ -112,6 +112,12 @@ test('idea lab streams an answer', async () => {
   await page.locator('.msg.assistant table').waitFor();
   await shot('07-idea-lab');
   assert.ok(await page.getByRole('button', { name: /Create a post from this/ }).isVisible());
+  // Reopening the saved conversation shows the question and the stored answer.
+  await page.getByRole('button', { name: /New conversation/ }).click();
+  await page.getByRole('heading', { name: 'Try Idea Lab' }).waitFor();
+  await page.locator('.chat-list').getByRole('button', { name: /content calendar/ }).click();
+  await page.locator('.msg.assistant table').waitFor();
+  assert.equal(await page.locator('.msg.user').count(), 1);
 });
 
 test('no console or page errors', () => {
