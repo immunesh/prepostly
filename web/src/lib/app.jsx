@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { get, patch, setBrandId } from './api.js';
 
 // Session, active brand and product catalogue, shared across the app.
@@ -11,16 +11,31 @@ export function AppProvider({ children }) {
   const [catalog, setCatalog] = useState(null);
   const [toasts, setToasts] = useState([]);
 
+  const meRef = useRef(undefined);
   const refresh = useCallback(async () => {
-    try {
-      const m = await get('/api/me');
-      setBrandId(m?.brand?.id || null);
-      setMe(m);
-      return m;
-    } catch {
-      setBrandId(null);
-      setMe(null);
-      return null;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const m = await get('/api/me');
+        setBrandId(m?.brand?.id || null);
+        meRef.current = m;
+        setMe(m);
+        return m;
+      } catch (e) {
+        // Only the server signs you out: /api/me answers null when signed out and 401/403 when
+        // the session is gone or suspended. A dropped connection, a laptop waking up, a deploy
+        // restart or a proxy error keeps the current session and retries.
+        if (e.status === 401 || e.status === 403) {
+          setBrandId(null);
+          meRef.current = null;
+          setMe(null);
+          return null;
+        }
+        if (attempt >= 2) {
+          if (meRef.current === undefined) setMe(null);
+          return meRef.current ?? null;
+        }
+        await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+      }
     }
   }, []);
 
