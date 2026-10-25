@@ -27,7 +27,7 @@ export default function Team() {
         <table className="table"><thead><tr><th>Brand</th><th>Members</th><th>Channels</th><th>Posts</th><th>Status</th><th /></tr></thead><tbody>
           {mine.map((b) => (
             <tr key={b.id}>
-              <td><div className="row"><Avatar src={b.logo_light} name={b.name} /><span className="bold">{b.name}</span>{b.id === me.brand.id && <span className="badge brand">Current</span>}</div></td>
+              <td><div className="row"><Avatar src={b.logo_light} name={b.name} logo /><span className="bold">{b.name}</span>{b.id === me.brand.id && <span className="badge brand">Current</span>}</div></td>
               <td>{b.members}</td><td>{b.channels}</td><td>{b.posts}</td>
               <td>{b.active ? <span className="badge ok">Active</span> : <span className="badge">Inactive</span>}</td>
               <td className="right nowrap">
@@ -43,7 +43,7 @@ export default function Team() {
       {shared.length > 0 && (
         <div className="card mb">
           <div className="card-head"><h3>Shared with me</h3></div>
-          <table className="table"><tbody>{shared.map((b) => <tr key={b.id}><td><div className="row"><Avatar src={b.logo_light} name={b.name} /><span className="bold">{b.name}</span></div></td><td className="small muted">Owner: {b.owner?.name}</td><td><span className="badge">{b.role}</span></td><td className="right">{b.id !== me.brand.id && <button className="btn sm" onClick={() => switchBrand(b.id)}>Switch</button>}</td></tr>)}</tbody></table>
+          <table className="table"><tbody>{shared.map((b) => <tr key={b.id}><td><div className="row"><Avatar src={b.logo_light} name={b.name} logo /><span className="bold">{b.name}</span></div></td><td className="small muted">Owner: {b.owner?.name}</td><td><span className="badge">{b.role}</span></td><td className="right">{b.id !== me.brand.id && <button className="btn sm" onClick={() => switchBrand(b.id)}>Switch</button>}</td></tr>)}</tbody></table>
         </div>
       )}
 

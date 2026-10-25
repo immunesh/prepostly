@@ -152,6 +152,6 @@ docs/                 reverse-engineering findings
 
 ## Not included
 
-- Payment checkout. Plans switch instantly in `BILLING_MODE=manual`; connect Stripe, Paddle or Dodo Payments for real billing.
+- Payment checkout through Dodo Payments (set the `DODO_*` vars in `.env`; webhook at `/api/billing/webhook/dodo`). A plan switches on only after a verified successful payment; without Dodo, admins assign plans from the Admin dashboard.
 - Email delivery. Invitations return a link to share, and notifications are in-app.
 - Referral programs, an inspiration library of trending reference videos, and third-party video models (Veo, Kling).

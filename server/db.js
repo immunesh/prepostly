@@ -361,6 +361,29 @@ CREATE TABLE IF NOT EXISTS notifications (
   read INTEGER NOT NULL DEFAULT 0,
   created_at ${TS}
 );
+-- Checkout and subscription payments (Dodo Payments). Amounts are in the currency's smallest unit.
+CREATE TABLE IF NOT EXISTS payments (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan TEXT NOT NULL,
+  provider TEXT NOT NULL DEFAULT 'dodo',
+  checkout_session_id TEXT UNIQUE,
+  payment_id TEXT UNIQUE,
+  subscription_id TEXT,
+  amount INTEGER,
+  currency TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_at ${TS},
+  updated_at ${TS}
+);
+CREATE INDEX IF NOT EXISTS payments_user ON payments(user_id, created_at);
+-- Webhook deliveries already handled (providers retry, so each event id is processed once).
+CREATE TABLE IF NOT EXISTS webhook_events (
+  id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL,
+  type TEXT NOT NULL,
+  received_at ${TS}
+);
 `);
 
 // Columns added after their table was first created.
@@ -371,6 +394,12 @@ addColumn('autopilots', 'horizon_days', 'INTEGER NOT NULL DEFAULT 7');
 addColumn('users', 'is_admin', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('users', 'suspended', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('credit_ledger', 'note', 'TEXT');
+// Who set the plan: 'admin' plans refill monthly on their own; 'dodo' plans refill when a payment lands.
+addColumn('users', 'plan_source', 'TEXT');
+addColumn('users', 'billing_status', 'TEXT');
+addColumn('users', 'paid_until', 'TEXT');
+addColumn('users', 'dodo_customer_id', 'TEXT');
+addColumn('users', 'dodo_subscription_id', 'TEXT');
 
 // ---------- query helpers ----------
 export const one = (sql, ...p) => db.prepare(sql).get(...p);

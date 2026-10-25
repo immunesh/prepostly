@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { api, get, post, patch, del, fmtDate, fmtDay } from '../lib/api.js';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { api, get, post, patch, del, fmtDate, fmtDay, fmtMoney } from '../lib/api.js';
 import { useApp, useLoad } from '../lib/app.jsx';
 import { AsyncButton, Loading, Tabs } from '../components/ui.jsx';
 
@@ -7,19 +8,55 @@ export default function Account() {
   const { me, refresh, toast, can } = useApp();
   const [acc, { reload }] = useLoad(() => get('/api/account'), []);
   const [tab, setTab] = useState('plan');
+  const [params, setParams] = useSearchParams();
+  // Back from checkout: the plan switches on when the payment provider confirms the payment.
+  const returned = params.get('checkout') === 'return' ? params.get('status') || 'unknown' : null;
+  const [waiting, setWaiting] = useState(false);
+  useEffect(() => {
+    if (!returned || returned === 'failed' || returned === 'cancelled') return;
+    setWaiting(true);
+    let tries = 0;
+    const t = setInterval(async () => {
+      tries++;
+      const a = await get('/api/account').catch(() => null);
+      const paid = a?.payments?.[0]?.status === 'succeeded' && a.plan.source === 'dodo';
+      if (paid || tries >= 20) {
+        clearInterval(t);
+        setWaiting(false);
+        if (paid) { toast(`You're on ${a.plan.label}`, 'ok'); setParams({}, { replace: true }); }
+        reload();
+        refresh();
+      }
+    }, 3000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [returned]);
   if (!acc) return <Loading />;
   const fail = (e) => toast(e.message, 'err');
+  const checkout = async (plan) => {
+    const { url } = await post('/api/billing/checkout', { plan });
+    window.location.assign(url);
+  };
+  const canBuy = (k) => acc.checkout_plans.includes(k);
+  const sub = acc.plan.source === 'dodo';
   return (
     <>
-      <div className="page-head"><div><h1>💳 Plan & account</h1><p>Check your usage, change plan, and connect developer tools.</p></div></div>
+      <div className="page-head"><div><h1>💳 Plan & account</h1><p>Check your usage, buy a plan, and connect developer tools.</p></div></div>
       <Tabs value={tab} onChange={setTab} tabs={[['plan', 'Billing plan'], ['usage', 'Account usage'], ['developers', 'API & MCP'], ['profile', 'Profile']]} />
       {tab === 'plan' && (
         <>
           <div className="card pad mb row between wrap">
             <div><h3>{acc.plan.label}{acc.plan.expired && <span className="badge err" style={{ marginLeft: 8 }}>Expired</span>}</h3>
               <p className="small muted">{acc.credits.toLocaleString()} credits left{acc.credits_reset_at ? ` · refreshes ${fmtDay(acc.credits_reset_at)}` : acc.plan.trialEndsAt ? ` · trial ends ${fmtDay(acc.plan.trialEndsAt)}` : ''}</p></div>
-            {acc.billing_mode === 'manual' && <span className="small muted">Self-hosted billing: plan changes apply instantly. Connect a payment provider for checkout.</span>}
+            {sub && acc.plan.billingStatus === 'active' && (
+              <AsyncButton className="btn sm" onError={fail} onClick={async () => { if (!confirm(`Cancel ${acc.plan.label}? You keep it until ${fmtDay(acc.plan.paidUntil)}.`)) return; await post('/api/billing/cancel'); toast('Subscription cancelled. It ends with the period you paid for.', 'ok'); reload(); }}>Cancel subscription</AsyncButton>
+            )}
+            {sub && acc.plan.billingStatus === 'cancelling' && <span className="small muted">Cancelled · ends {fmtDay(acc.plan.paidUntil)}</span>}
+            {!acc.checkout_plans.length && <span className="small muted">Online checkout isn’t available yet. Contact us to upgrade your plan.</span>}
           </div>
+          {returned && (waiting ? <div className="alert info mb">⏳ Confirming your payment. Your plan switches on as soon as it’s confirmed. This usually takes a few seconds.</div>
+            : returned === 'failed' || returned === 'cancelled' ? <div className="alert err mb">The payment didn’t go through, so your plan hasn’t changed. You can try again below.</div>
+              : acc.payments[0]?.status === 'succeeded' ? null : <div className="alert warn mb">We haven’t received the payment confirmation yet. Your plan switches on automatically once it arrives. Refresh this page in a minute.</div>)}
           <div className="grid g3">
             {Object.entries(acc.plans).filter(([k]) => k !== 'trial').map(([k, p]) => (
               <div key={k} className="card pad stack" style={k === 'rise' ? { borderColor: 'var(--brand)', borderWidth: 2 } : undefined}>
@@ -34,12 +71,17 @@ export default function Account() {
                   <li>Tracks {p.adTrackers} brands in Ad Intelligence</li>
                   <li>No watermark · unlimited team members · API & MCP</li>
                 </ul>
-                {acc.plan.plan === k ? <button className="btn" disabled>Current plan</button> : (
-                  <AsyncButton className="btn primary" disabled={acc.billing_mode !== 'manual'} onError={fail} onClick={async () => { await post('/api/account/plan', { plan: k }); toast(`You're on ${p.label}`, 'ok'); reload(); refresh(); }}>Switch to {p.label}</AsyncButton>
+                {acc.plan.plan === k && !acc.plan.expired ? <button className="btn" disabled>Current plan</button> : (
+                  <AsyncButton className="btn primary" disabled={!canBuy(k) || waiting} title={canBuy(k) ? undefined : 'Online checkout is not available for this plan yet'} onError={fail} onClick={() => checkout(k)}>{acc.plan.plan === k ? `Renew ${p.label}` : `Buy ${p.label}`}</AsyncButton>
                 )}
               </div>
             ))}
           </div>
+          {acc.payments.length > 0 && (
+            <div className="card mt"><div className="card-head"><h3>Payment history</h3></div>
+              <table className="table small"><tbody>{acc.payments.map((p) => <tr key={p.id}><td className="nowrap muted">{fmtDate(p.created_at)}</td><td>{acc.plans[p.plan]?.label || p.plan}</td><td>{fmtMoney(p.amount, p.currency)}</td><td><span className={`badge ${{ succeeded: 'ok', failed: 'err', cancelled: 'warn', refunded: 'warn' }[p.status] || ''}`}>{p.status === 'pending' ? 'not completed' : p.status}</span></td></tr>)}</tbody></table>
+            </div>
+          )}
         </>
       )}
       {tab === 'usage' && (

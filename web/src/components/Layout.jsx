@@ -73,7 +73,6 @@ export default function Layout() {
     <div className="app">
       <aside className="sidebar">
         <Link to="/app/dashboard" className="logo"><img src="/favicon.svg" alt="" /><span>Prepostly</span></Link>
-        <Link to="/app/create" className="btn primary block" style={{ marginBottom: 6 }}>✨ Create</Link>
         {[...NAV, ...(me.user.is_admin ? [['Admin', [['/app/admin', '🛡️', 'Admin dashboard']]]] : [])].map(([section, items]) => (
           <nav className="nav" key={section}>
             <div className="nav-section">{section}</div>
@@ -96,7 +95,7 @@ export default function Layout() {
         <header className="topbar">
           <Dropdown trigger={
             <button className="btn" aria-label="Switch brand">
-              <Avatar src={brand?.logo_light} name={brand?.name} size={22} />
+              <Avatar src={brand?.logo_light} name={brand?.name} size={22} logo />
               <span className="clip" style={{ maxWidth: 180 }}>{brand?.name}</span>
               <span className="faint">▾</span>
             </button>
@@ -104,7 +103,7 @@ export default function Layout() {
             <div className="tiny faint" style={{ padding: '6px 10px' }}>Switch brand</div>
             {me.brands.map((b) => (
               <button key={b.id} onClick={() => switchBrand(b.id)}>
-                <Avatar src={b.logo_light} name={b.name} size={22} />
+                <Avatar src={b.logo_light} name={b.name} size={22} logo />
                 <span className="clip" style={{ flex: 1 }}>{b.name}</span>
                 {b.id === brand?.id && '✓'}
                 <span className="badge">{b.role}</span>

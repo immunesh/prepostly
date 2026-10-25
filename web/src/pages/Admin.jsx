@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { get, post, patch, del, fmtDate, fmtDay, fmtNum, PLATFORM_ICON, TYPE_ICON } from '../lib/api.js';
+import { get, post, patch, del, fmtDate, fmtDay, fmtNum, fmtMoney, PLATFORM_ICON, TYPE_ICON } from '../lib/api.js';
 import { useApp, useLoad } from '../lib/app.jsx';
 import { AsyncButton, Avatar, ErrorBox, Loading, Modal, Switch, Tabs } from '../components/ui.jsx';
 import { Bars, ChartCard, HBars, Line } from '../components/Charts.jsx';
@@ -289,6 +289,9 @@ function UserDetail({ id, onClose, onChanged }) {
           <Card title="API usage" subtitle="All time">
             <Table head={['Feature', 'Model', ' Calls', ' Tokens', ' Cost']} empty="No API calls yet." rows={d.usage.map((r) => <tr key={r.provider + r.model + r.feature}><td>{featureLabel(r.feature)}</td><td className="muted">{r.model || r.provider}</td><R>{r.calls}</R><R>{r.provider === 'heygen' ? `${Math.round(r.units)} s video` : tokens(r)}</R><R>{usd(r.cost)}</R></tr>)} />
           </Card>
+          <Card title="Payments" subtitle={d.plan.source === 'dodo' ? `Paid via checkout · ${d.plan.billingStatus || 'unknown'}${d.plan.paidUntil ? ` · paid until ${fmtDay(d.plan.paidUntil)}` : ''}` : d.plan.source === 'admin' ? 'Plan assigned by an admin' : undefined}>
+            <PaymentRows rows={d.payments} />
+          </Card>
           <Card title="Credit history" subtitle="Last 100 entries">
             <LedgerRows rows={d.ledger} />
           </Card>
@@ -352,6 +355,40 @@ function Usage({ days, openUser }) {
       </div>
       <Card title="Recent calls" subtitle="Latest 100">
         <Table head={['When', 'User', 'Feature', 'Model', ' In', ' Out', ' Cost']} empty="No calls." rows={d.recent.map((r) => <tr key={r.id}><td className="muted" style={{ whiteSpace: 'nowrap' }}>{fmtDate(r.created_at)}</td><td className="clip" style={{ maxWidth: 200 }}>{r.email || '—'}</td><td>{featureLabel(r.feature)}</td><td className="muted">{r.model}</td><R>{r.provider === 'heygen' ? `${Math.round(r.units)} s` : fmtNum(r.input_tokens)}</R><R>{fmtNum(r.output_tokens)}</R><R className="bold">{usd(r.cost_usd)}</R></tr>)} />
+      </Card>
+    </>
+  );
+}
+
+const PAY_BADGE = { succeeded: 'ok', pending: '', failed: 'err', cancelled: 'warn', refunded: 'warn' };
+function PaymentRows({ rows, withUser, openUser }) {
+  return (
+    <Table head={['Date', ...(withUser ? ['User'] : []), 'Plan', ' Amount', 'Status', 'Payment ID']} empty="No payments yet." rows={rows.map((p) => (
+      <tr key={p.id}>
+        <td className="nowrap muted">{fmtDate(p.created_at)}</td>
+        {withUser && <td><button className="btn ghost sm" onClick={() => openUser(p.user_id)}>{p.email}</button></td>}
+        <td>{p.plan}</td>
+        <R>{fmtMoney(p.amount, p.currency)}</R>
+        <td><span className={`badge ${PAY_BADGE[p.status] || ''}`}>{p.status}</span></td>
+        <td className="tiny muted"><code>{p.payment_id || '—'}</code></td>
+      </tr>
+    ))} />
+  );
+}
+
+// ---------------------------------------------------------------- payments
+function Payments({ days, openUser, reloadKey }) {
+  const [d, { loading, error, reload }] = useLoad(() => get(`/api/admin/payments?days=${days}`), [days, reloadKey]);
+  if (error) return <ErrorBox error={error} onRetry={reload} />;
+  if (loading && !d) return <Loading />;
+  return (
+    <>
+      <div className="grid g4 mb">
+        {d.revenue.length ? d.revenue.map((r) => <Kpi key={r.currency} label={`Revenue (${r.currency})`} value={fmtMoney(r.amount, r.currency)} sub={`${r.n} successful payment${r.n === 1 ? '' : 's'}`} />) : <Kpi label="Revenue" value={fmtMoney(0)} sub="No successful payments in this window" />}
+        <Kpi label="Pending checkouts" value={d.payments.filter((p) => p.status === 'pending').length} sub="Started but not paid" />
+      </div>
+      <Card title="Payments" subtitle={`Last ${d.days} days · plans switch on only when the payment provider confirms the payment`}>
+        <PaymentRows rows={d.payments} withUser openUser={openUser} />
       </Card>
     </>
   );
@@ -453,11 +490,12 @@ export default function Admin() {
     <>
       <div className="page-head">
         <div><h1>Admin</h1><p>All users, credits and API spend across Prepostly.</p></div>
-        {(tab === 'overview' || tab === 'usage') && <DayChips days={days} setDays={setDays} />}
+        {(tab === 'overview' || tab === 'usage' || tab === 'payments') && <DayChips days={days} setDays={setDays} />}
       </div>
-      <Tabs tabs={[['overview', 'Overview'], ['users', 'Users'], ['usage', 'API usage'], ['ledger', 'Credit ledger'], ['pricing', 'Credit pricing']]} value={tab} onChange={setTab} />
+      <Tabs tabs={[['overview', 'Overview'], ['users', 'Users'], ['payments', 'Payments'], ['usage', 'API usage'], ['ledger', 'Credit ledger'], ['pricing', 'Credit pricing']]} value={tab} onChange={setTab} />
       {tab === 'overview' && <Overview days={days} openUser={setUserId} key={reloadKey} />}
       {tab === 'users' && <Users openUser={setUserId} reloadKey={reloadKey} />}
+      {tab === 'payments' && <Payments days={days} openUser={setUserId} reloadKey={reloadKey} />}
       {tab === 'usage' && <Usage days={days} openUser={setUserId} />}
       {tab === 'ledger' && <Ledger openUser={setUserId} reloadKey={reloadKey} />}
       {tab === 'pricing' && <Pricing />}

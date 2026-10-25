@@ -162,6 +162,42 @@ function blobs(W, H, colors, seed, opacity = 0.35) {
   return `<defs>${defs}</defs>${out}`;
 }
 
+/** Width/height ratio of a PNG, JPEG, GIF or SVG data URI, or null when it can't be read. */
+export function imageRatio(dataUri) {
+  const m = /^data:([^;,]+);base64,(.*)$/s.exec(String(dataUri || ''));
+  if (!m) return null;
+  const buf = Buffer.from(m[2], 'base64');
+  let w = 0;
+  let h = 0;
+  if (m[1] === 'image/png' && buf.length > 24) {
+    w = buf.readUInt32BE(16);
+    h = buf.readUInt32BE(20);
+  } else if (m[1] === 'image/gif' && buf.length > 10) {
+    w = buf.readUInt16LE(6);
+    h = buf.readUInt16LE(8);
+  } else if (m[1] === 'image/jpeg') {
+    for (let i = 2; i + 9 < buf.length;) {
+      if (buf[i] !== 0xff) break;
+      const marker = buf[i + 1];
+      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+        h = buf.readUInt16BE(i + 5);
+        w = buf.readUInt16BE(i + 7);
+        break;
+      }
+      i += 2 + buf.readUInt16BE(i + 2);
+    }
+  } else if (m[1] === 'image/svg+xml') {
+    const tag = /<svg[^>]*>/i.exec(buf.toString('utf8'))?.[0] || '';
+    const vb = /viewBox\s*=\s*["']\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(tag);
+    if (vb) [w, h] = [Number(vb[1]), Number(vb[2])];
+    else {
+      w = parseFloat(/\swidth\s*=\s*["']([\d.]+)/i.exec(tag)?.[1]);
+      h = parseFloat(/\sheight\s*=\s*["']([\d.]+)/i.exec(tag)?.[1]);
+    }
+  }
+  return w > 0 && h > 0 ? w / h : null;
+}
+
 function image(href, x, y, w, h, fitMode = 'slice', align = 'xMidYMid') {
   return `<image href="${href}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="${align} ${fitMode}"/>`;
 }
@@ -354,18 +390,29 @@ export function slideSvg({ brand, slide, index = 0, total = 1, format = 'square'
     body += `<rect x="${pad * 0.7}" y="${by}" width="${W - pad * 1.4}" height="${bandH}" rx="${18 * unit}" fill="#000" opacity="0.62"/>${textBlock({ lines: cs.lines, x: W / 2, y: by + cs.size * 1.15, size: cs.size, font: bodyFont, weight: 700, fill: '#fff', anchor: 'middle', lineHeight: 1.3 })}`;
   }
 
-  // Footer: logo, handle, carousel dots, watermark.
+  // Footer: the brand logo (or the handle when there's no logo), carousel dots, watermark.
   let footer = '';
   const fy = H - pad * 0.55;
   const footFg = effTemplate === 'photo' || effTemplate === 'neon' ? 'rgba(255,255,255,0.9)' : kind === 'meme' ? '#ffffff' : muted;
-  let fx = pad;
-  if (assets.logo && kind !== 'meme') {
+  const darkFooter = /^(#fff|rgba\(255)/i.test(footFg);
+  // Prefer the variant made for this background; a mismatched one sits on a contrasting chip.
+  const logo = (darkFooter ? assets.logoDark || assets.logo : assets.logo || assets.logoDark) || null;
+  if (logo && kind !== 'meme') {
     const ls = Math.round(56 * unit);
-    footer += image(assets.logo, fx, fy - ls * 0.78, ls * 2.4, ls, 'meet', 'xMinYMid');
-    fx += ls * 2.6;
+    const ratio = imageRatio(logo) || 2.4;
+    const lw = Math.min(ls * ratio, ls * 4);
+    const lh = lw / ratio;
+    const ly = fy - ls * 0.78 + (ls - lh) / 2;
+    const onChip = darkFooter ? logo !== assets.logoDark : logo === assets.logoDark && !assets.logo;
+    if (onChip) {
+      const cp = Math.round(12 * unit);
+      footer += `<rect x="${pad - cp}" y="${ly - cp}" width="${lw + cp * 2}" height="${lh + cp * 2}" rx="${Math.round(14 * unit)}" fill="${darkFooter ? '#ffffff' : '#111111'}" opacity="0.92"/>`;
+    }
+    footer += image(logo, pad, ly, lw, lh, 'meet', 'xMinYMid');
+  } else if (kind !== 'meme') {
+    const handle = brand.handle ? `@${String(brand.handle).replace(/^@/, '')}` : brand.website ? String(brand.website).replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '') : '';
+    if (handle) footer += `<text x="${pad}" y="${fy}" font-family="${esc(family(bodyFont, 600))}" font-size="${Math.round(26 * unit)}" font-weight="600" fill="${footFg}">${esc(handle)}</text>`;
   }
-  const handle = brand.handle ? `@${String(brand.handle).replace(/^@/, '')}` : brand.website ? String(brand.website).replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '') : '';
-  if (handle && kind !== 'meme' && !(kind === 'cover' && total > 1 && !assets.logo && false)) footer += `<text x="${fx}" y="${fy}" font-family="${esc(family(bodyFont, 600))}" font-size="${Math.round(26 * unit)}" font-weight="600" fill="${footFg}">${esc(handle)}</text>`;
   if (total > 1 && kind !== 'cover') {
     const dot = 10 * unit;
     const start = W - pad - total * dot * 2.4;

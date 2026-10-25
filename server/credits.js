@@ -14,7 +14,8 @@ export const planOf = (user) => PLANS[user.plan] || PLANS.trial;
 export function refreshCredits(userId) {
   const user = one('SELECT * FROM users WHERE id = ?', userId);
   if (!user) throw new HttpError(404, 'Account not found.');
-  if (user.plan === 'trial') return user;
+  // Trials don't refill, and paid checkouts refill when each payment lands (server/billing.js).
+  if (user.plan === 'trial' || user.plan_source === 'dodo') return user;
   if (!user.credits_reset_at || user.credits_reset_at <= now()) {
     const plan = planOf(user);
     let next = user.credits_reset_at || addMonths(now(), 1);
@@ -39,14 +40,16 @@ export function planStatus(user) {
     const ends = new Date(new Date(user.plan_started_at).getTime() + plan.days * 864e5).toISOString();
     return { plan: user.plan, ...plan, trialEndsAt: ends, expired: ends < now() };
   }
-  return { plan: user.plan, ...plan, expired: false };
+  // A paid subscription that was cancelled or stopped renewing ends with its paid period.
+  const lapsed = user.plan_source === 'dodo' && user.billing_status !== 'active' && Boolean(user.paid_until) && user.paid_until < now();
+  return { plan: user.plan, ...plan, expired: lapsed, billingStatus: user.billing_status || null, paidUntil: user.paid_until || null, source: user.plan_source || null };
 }
 
 /** Deduct credits from the brand owner's balance, or throw 402. */
 export function charge(brand, amount, reason, ref = null) {
   const payer = payerFor(brand);
   const status = planStatus(payer);
-  if (status.expired) throw new HttpError(402, 'Your free trial has ended. Choose a plan to keep creating.', 'plan_expired');
+  if (status.expired) throw new HttpError(402, status.trialEndsAt ? 'Your free trial has ended. Choose a plan to keep creating.' : 'Your plan has ended. Renew it to keep creating.', 'plan_expired');
   if (amount <= 0) return payer.credits;
   return tx(() => {
     const fresh = one('SELECT credits FROM users WHERE id = ?', payer.id);

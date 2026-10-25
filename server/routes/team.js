@@ -1,11 +1,11 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
 import { one, all, run, uuid, now, insert } from '../db.js';
-import { config } from '../config.js';
 import { HttpError, requireUser, brandFor, sha256 } from '../auth.js';
 import { PLANS, ROLES } from '../catalog.js';
 import { planStatus, refreshCredits, usageThisMonth } from '../credits.js';
 import { notify } from '../notify.js';
+import { purchasablePlans, paymentsFor } from '../billing.js';
 import { publicBrand } from './auth.js';
 
 // Team members and roles, account/plan/credits, API keys and notifications.
@@ -110,19 +110,10 @@ router.get('/account', (req, res) => {
     },
     ledger: all('SELECT * FROM credit_ledger WHERE user_id = ? ORDER BY created_at DESC LIMIT 50', user.id),
     plans: PLANS,
-    billing_mode: config.billingMode,
+    // Plans are bought through checkout when it's set up; otherwise a site admin assigns them.
+    checkout_plans: purchasablePlans(),
+    payments: paymentsFor(user.id),
   });
-});
-
-router.post('/account/plan', (req, res) => {
-  if (config.billingMode !== 'manual') throw new HttpError(400, 'Plan changes go through checkout on this server.');
-  const plan = req.body.plan;
-  if (!PLANS[plan] || plan === 'trial') throw new HttpError(400, 'Choose core, rise or enterprise.');
-  const next = new Date();
-  next.setUTCMonth(next.getUTCMonth() + 1);
-  run('UPDATE users SET plan = ?, plan_started_at = ?, credits = ?, credits_reset_at = ? WHERE id = ?', plan, now(), PLANS[plan].credits, next.toISOString(), req.user.id);
-  run('INSERT INTO credit_ledger (id, user_id, delta, reason) VALUES (?, ?, ?, ?)', uuid(), req.user.id, PLANS[plan].credits, `plan:${plan}`);
-  res.json({ ok: true, plan });
 });
 
 // ---------------------------------------------------------------- API keys

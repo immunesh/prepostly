@@ -8,6 +8,7 @@ import { llmAvailable, writerName } from '../engines/llm.js';
 import { stockAvailable, aiImagesAvailable } from '../engines/images.js';
 import { ttsStatus } from '../engines/tts.js';
 import { avatarAvailable } from '../engines/avatar.js';
+import { purchasablePlans } from '../billing.js';
 
 export const router = Router();
 
@@ -89,7 +90,7 @@ router.get('/me', (req, res, next) => (userFromSession(req) ? requireUser(req, r
       voiceover: ttsStatus.state,
       avatar_video: avatarAvailable(),
       public_url: config.publicUrl || null,
-      billing: config.billingMode,
+      billing: purchasablePlans().length ? 'dodo' : 'admin',
     },
   });
 });

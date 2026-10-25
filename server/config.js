@@ -58,8 +58,14 @@ export const config = {
   // Flat price per AI image. Empty prices each image from the token usage OpenAI reports.
   openaiImageUsd: env('OPENAI_IMAGE_USD') === '' ? null : Number(env('OPENAI_IMAGE_USD')),
 
-  // Billing: 'manual' lets account owners switch plans without payment (self-hosted).
-  billingMode: env('BILLING_MODE', 'manual'),
+  // Billing (Dodo Payments). Without these, plans are assigned by site admins only.
+  dodo: {
+    apiKey: env('DODO_PAYMENTS_API_KEY'),
+    webhookSecret: env('DODO_PAYMENTS_WEBHOOK_SECRET'),
+    baseUrl: env('DODO_PAYMENTS_ENV', 'test') === 'live' ? 'https://live.dodopayments.com' : 'https://test.dodopayments.com',
+    // One Dodo product per plan (a monthly subscription, or a one-time product that buys a month).
+    products: { core: env('DODO_PRODUCT_CORE'), rise: env('DODO_PRODUCT_RISE'), enterprise: env('DODO_PRODUCT_ENTERPRISE') },
+  },
 
   // Social platform apps (OAuth). A platform without credentials shows as "not configured".
   oauth: {

@@ -68,6 +68,8 @@ export async function streamPost(path, body, onEvent, signal) {
 export const fmtDate = (iso, opts = {}) => (iso ? new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...opts }) : '');
 export const fmtDay = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '');
 export const fmtNum = (n) => (n == null ? '—' : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${(n / 1e3).toFixed(1)}k` : n.toLocaleString());
+/** An amount in the currency's smallest unit (e.g. cents), formatted like $19.00. */
+export const fmtMoney = (amount, currency = 'USD') => (amount == null ? '—' : (amount / 100).toLocaleString(undefined, { style: 'currency', currency: currency || 'USD' }));
 export const fmtBytes = (n) => (n > 1e9 ? `${(n / 1e9).toFixed(1)} GB` : n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.round(n / 1e3)} KB`);
 export function timeAgo(iso) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;

@@ -80,8 +80,10 @@ export function PlatformIcon({ platform, size = 16 }) {
   return <span style={{ fontSize: size, lineHeight: 1 }} title={platform}>{PLATFORM_ICON[platform] || '🔗'}</span>;
 }
 
-export function Avatar({ src, name, size = 32 }) {
+/** A person's photo, or with `logo` a brand logo shown whole (wide wordmarks keep their shape). */
+export function Avatar({ src, name, size = 32, logo = false }) {
   const initials = String(name || '?').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  if (src && logo) return <img src={src} alt="" style={{ height: size, width: 'auto', minWidth: size, maxWidth: size * 3, objectFit: 'contain', borderRadius: 6, background: '#fff', boxShadow: 'inset 0 0 0 1px var(--border)', padding: 2, boxSizing: 'border-box', flex: 'none' }} />;
   if (src) return <img src={src} alt="" style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flex: 'none' }} />;
   return <span style={{ width: size, height: size, borderRadius: '50%', background: 'var(--gradient)', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.38, fontWeight: 700, flex: 'none' }}>{initials}</span>;
 }

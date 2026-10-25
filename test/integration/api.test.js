@@ -840,14 +840,100 @@ describe('credits & plans', () => {
     assert.equal((await c.get('/api/me')).data.credits, 10);
   });
 
-  test('changing plan refills credits (manual billing mode)', async () => {
+  test('users cannot switch plans themselves', async () => {
     const c = await newUser(base);
-    const r = await c.post('/api/account/plan', { plan: 'rise' });
-    assert.equal(r.status, 200);
+    assert.equal((await c.post('/api/account/plan', { plan: 'rise' })).status, 404);
     const acc = await c.get('/api/account');
-    assert.equal(acc.data.plan.plan, 'rise');
-    assert.equal(acc.data.credits, 3200);
-    assert.equal((await c.post('/api/brands', { name: 'Second brand' })).status, 201);
+    assert.equal(acc.data.plan.plan, 'trial');
+    assert.deepEqual(acc.data.checkout_plans, []);
+    // Without Dodo set up there is no checkout either.
+    assert.equal((await c.post('/api/billing/checkout', { plan: 'rise' })).status, 400);
+  });
+
+  test('Dodo checkout: plan switches on only after a verified successful payment', async () => {
+    const { config } = await import('../../server/config.js');
+    const http = await import('node:http');
+    const calls = [];
+    const dodo = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', (d) => { body += d; });
+      req.on('end', () => {
+        calls.push({ method: req.method, url: req.url, auth: req.headers.authorization, body: body ? JSON.parse(body) : null });
+        res.setHeader('content-type', 'application/json');
+        if (req.method === 'POST' && req.url === '/checkouts') return res.end(JSON.stringify({ session_id: `cks_${calls.length}`, checkout_url: `https://checkout.example/cks_${calls.length}` }));
+        res.end('{}');
+      });
+    });
+    await new Promise((r) => dodo.listen(0, '127.0.0.1', r));
+    const secretKey = crypto.randomBytes(24);
+    const saved = config.dodo;
+    config.dodo = { apiKey: 'sk_test', webhookSecret: `whsec_${secretKey.toString('base64')}`, baseUrl: `http://127.0.0.1:${dodo.address().port}`, products: { core: 'pdt_core', rise: 'pdt_rise', enterprise: '' } };
+    const hook = async (event, { id = crypto.randomUUID(), sign = true } = {}) => {
+      const raw = JSON.stringify(event);
+      const ts = String(Math.floor(Date.now() / 1000));
+      const sig = crypto.createHmac('sha256', sign ? secretKey : crypto.randomBytes(24)).update(`${id}.${ts}.${raw}`).digest('base64');
+      const r = await fetch(`${base}/api/billing/webhook/dodo`, { method: 'POST', headers: { 'content-type': 'application/json', 'webhook-id': id, 'webhook-timestamp': ts, 'webhook-signature': `v1,${sig}` }, body: raw });
+      return r.status;
+    };
+    try {
+      const c = await newUser(base);
+      const me = (await c.get('/api/me')).data.user;
+      assert.deepEqual((await c.get('/api/account')).data.checkout_plans, ['core', 'rise']);
+      assert.equal((await c.post('/api/billing/checkout', { plan: 'enterprise' })).status, 400);
+      const co = await c.post('/api/billing/checkout', { plan: 'rise' });
+      assert.equal(co.status, 200);
+      assert.match(co.data.url, /^https:\/\/checkout\.example\//);
+      const sent = calls.find((x) => x.url === '/checkouts');
+      assert.equal(sent.auth, 'Bearer sk_test');
+      assert.deepEqual(sent.body.product_cart, [{ product_id: 'pdt_rise', quantity: 1 }]);
+      assert.deepEqual(sent.body.metadata, { user_id: me.id, plan: 'rise' });
+      const session = co.data.url.split('/').pop();
+
+      // Checkout alone changes nothing.
+      let acc = (await c.get('/api/account')).data;
+      assert.equal(acc.plan.plan, 'trial');
+      assert.equal(acc.payments[0].status, 'pending');
+
+      const paid = { type: 'payment.succeeded', data: { payload_type: 'Payment', payment_id: 'pay_1', checkout_session_id: session, subscription_id: 'sub_1', status: 'succeeded', total_amount: 4000, currency: 'USD', customer: { customer_id: 'cus_1', email: me.email }, metadata: { user_id: me.id, plan: 'rise' } } };
+      // Forged or failed payments don't activate anything.
+      assert.equal(await hook(paid, { sign: false }), 401);
+      assert.equal(await hook({ type: 'payment.failed', data: { ...paid.data, payment_id: 'pay_0', status: 'failed' } }), 200);
+      acc = (await c.get('/api/account')).data;
+      assert.equal(acc.plan.plan, 'trial');
+
+      const eventId = crypto.randomUUID();
+      assert.equal(await hook(paid, { id: eventId }), 200);
+      assert.equal(await hook(paid, { id: eventId }), 200); // a retried delivery is ignored
+      acc = (await c.get('/api/account')).data;
+      assert.equal(acc.plan.plan, 'rise');
+      assert.equal(acc.credits, 3200);
+      assert.equal(acc.plan.watermark, false);
+      // The failed attempt and the successful payment are both on record, once each.
+      assert.deepEqual(acc.payments.map((p) => `${p.payment_id}:${p.status}`).sort(), ['pay_0:failed', 'pay_1:succeeded']);
+      assert.equal(acc.payments.find((p) => p.payment_id === 'pay_1').amount, 4000);
+      assert.equal(acc.ledger.filter((l) => l.reason === 'plan:rise').length, 1);
+
+      // A renewal payment on the same subscription refills credits.
+      db.run('UPDATE users SET credits = 5 WHERE id = ?', me.id);
+      assert.equal(await hook({ type: 'payment.succeeded', data: { payment_id: 'pay_2', subscription_id: 'sub_1', status: 'succeeded', total_amount: 4000, currency: 'USD', customer: { customer_id: 'cus_1' }, metadata: {} } }), 200);
+      acc = (await c.get('/api/account')).data;
+      assert.deepEqual([acc.plan.plan, acc.credits, acc.payments.length], ['rise', 3200, 3]);
+
+      // Cancelling keeps the plan until the paid period ends, then it lapses.
+      assert.equal((await c.post('/api/billing/cancel')).status, 200);
+      assert.deepEqual(calls.at(-1).body, { cancel_at_next_billing_date: true });
+      assert.equal(await hook({ type: 'subscription.cancelled', data: { subscription_id: 'sub_1', status: 'cancelled' } }), 200);
+      assert.equal((await c.get('/api/account')).data.plan.expired, false);
+      db.run('UPDATE users SET paid_until = ? WHERE id = ?', new Date(Date.now() - 1000).toISOString(), me.id);
+      acc = (await c.get('/api/account')).data;
+      assert.equal(acc.plan.expired, true);
+      const blocked = await c.post('/api/posts', { type: 'single_image', prompt: 'After the plan ended' });
+      assert.equal(blocked.status, 402);
+      assert.equal(blocked.data.code, 'plan_expired');
+    } finally {
+      config.dodo = saved;
+      dodo.close();
+    }
   });
 
   test('trial watermark is drawn; paid plan removes it', async () => {

@@ -16,6 +16,7 @@ import { router as autopilotRoutes } from './routes/autopilot.js';
 import { router as analyticsRoutes } from './routes/analytics.js';
 import { router as teamRoutes } from './routes/team.js';
 import { router as adminRoutes } from './routes/admin.js';
+import { router as billingRoutes, dodoWebhook } from './routes/billing.js';
 import { router as publicRoutes, v1Router } from './routes/public.js';
 import { router as mcpRoutes } from './routes/mcp.js';
 import { router as legalRoutes } from './routes/legal.js';
@@ -33,6 +34,8 @@ export function createApp() {
     res.set('referrer-policy', 'strict-origin-when-cross-origin');
     next();
   });
+  // Payment webhooks are verified against the raw bytes, so they skip JSON parsing.
+  app.post('/api/billing/webhook/dodo', express.raw({ type: '*/*', limit: '1mb' }), dodoWebhook);
   app.use(express.json({ limit: '2mb' }));
   // After body parsing, so each handler runs inside its own request's meter.
   app.use(meterRequests);
@@ -46,7 +49,7 @@ export function createApp() {
   app.use('/uploads', (_req, res, next) => { res.set('content-security-policy', "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox"); next(); }, express.static(path.join(config.dataDir, 'uploads'), longCache));
   app.use('/outbox', (_req, res, next) => { res.set('content-security-policy', "default-src 'none'; sandbox"); next(); }, express.static(path.join(config.dataDir, 'outbox'), { fallthrough: false }));
 
-  const api = [authRoutes, brandRoutes, postRoutes, accountRoutes, publishRoutes, ideaRoutes, intelRoutes, commerceRoutes, autopilotRoutes, analyticsRoutes, teamRoutes, adminRoutes];
+  const api = [authRoutes, brandRoutes, postRoutes, accountRoutes, publishRoutes, ideaRoutes, intelRoutes, commerceRoutes, autopilotRoutes, analyticsRoutes, teamRoutes, billingRoutes, adminRoutes];
   app.use('/api', publicRoutes, ...api);
   // Developer REST API (API-key auth) exposes the same resources.
   app.use('/v1', v1Router, postRoutes, accountRoutes, publishRoutes, commerceRoutes);

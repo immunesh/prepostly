@@ -79,7 +79,7 @@ router.get('/admin/overview', (req, res) => {
     suspended: n('SELECT COUNT(*) AS n FROM users WHERE suspended = 1'),
     trials_expired: n("SELECT COUNT(*) AS n FROM users WHERE plan = 'trial' AND plan_started_at < ?", trialCutoff),
     by_plan: all('SELECT plan, COUNT(*) AS n FROM users GROUP BY plan ORDER BY n DESC'),
-    // Monthly plan value at list price (BILLING_MODE=manual servers collect no payment).
+    // Monthly plan value at list price, for paid and admin-assigned plans alike.
     mrr: paid.reduce((s, p) => s + (PLANS[p.plan]?.price || 0) * p.n, 0),
   };
 
@@ -175,6 +175,7 @@ router.get('/admin/users/:id', (req, res) => {
         (SELECT COUNT(*) FROM social_accounts s WHERE s.brand_id = b.id) AS channels,
         (SELECT COUNT(*) FROM brand_members m WHERE m.brand_id = b.id) AS members
       FROM brands b WHERE b.owner_id = ? ORDER BY b.created_at`, u.id),
+    payments: all('SELECT * FROM payments WHERE user_id = ? ORDER BY created_at DESC LIMIT 50', u.id),
     member_of: all("SELECT b.id, b.name, m.role FROM brand_members m JOIN brands b ON b.id = m.brand_id WHERE m.user_id = ? AND b.owner_id != ?", u.id, u.id),
     ledger: all('SELECT l.*, a.email AS by_email FROM credit_ledger l LEFT JOIN users a ON a.id = l.ref AND l.reason = \'admin_adjust\' WHERE l.user_id = ? ORDER BY l.created_at DESC LIMIT 100', u.id),
     usage: all('SELECT provider, model, feature, COUNT(*) AS calls, SUM(input_tokens) AS input, SUM(output_tokens) AS output, SUM(units) AS units, SUM(cost_usd) AS cost FROM api_usage WHERE user_id = ? GROUP BY provider, model, feature ORDER BY cost DESC', u.id),
@@ -199,8 +200,8 @@ router.post('/admin/users', (req, res) => {
   if (!Number.isInteger(credits) || credits < 0) throw new HttpError(400, 'Credits must be a whole number of 0 or more.');
   const id = uuid();
   tx(() => {
-    run('INSERT INTO users (id, email, name, password_hash, plan, credits, credits_reset_at, is_admin) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      id, email, name, hashPassword(password), plan, credits, plan === 'trial' ? null : nextMonth(), req.body.is_admin ? 1 : 0);
+    run('INSERT INTO users (id, email, name, password_hash, plan, plan_source, credits, credits_reset_at, is_admin) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      id, email, name, hashPassword(password), plan, plan === 'trial' ? null : 'admin', credits, plan === 'trial' ? null : nextMonth(), req.body.is_admin ? 1 : 0);
     ledger(id, PLANS[plan].credits, plan === 'trial' ? 'trial_grant' : `plan:${plan}`);
     if (credits !== PLANS[plan].credits) ledger(id, credits - PLANS[plan].credits, 'admin_adjust', { by: req.user.id, note: 'Starting balance set by admin' });
   });
@@ -238,7 +239,8 @@ router.patch('/admin/users/:id', (req, res) => {
       // A plan change starts a fresh cycle (for trials, a fresh trial) and refills to the plan's credits.
       const credits = b.keep_credits ? one('SELECT credits FROM users WHERE id = ?', u.id).credits : PLANS[b.plan].credits;
       const before = one('SELECT credits FROM users WHERE id = ?', u.id).credits;
-      run('UPDATE users SET plan = ?, plan_started_at = ?, credits = ?, credits_reset_at = ? WHERE id = ?', b.plan, now(), credits, b.plan === 'trial' ? null : nextMonth(), u.id);
+      // An admin-assigned plan refills monthly on its own, outside any payment subscription.
+      run('UPDATE users SET plan = ?, plan_source = ?, billing_status = NULL, paid_until = NULL, plan_started_at = ?, credits = ?, credits_reset_at = ? WHERE id = ?', b.plan, b.plan === 'trial' ? null : 'admin', now(), credits, b.plan === 'trial' ? null : nextMonth(), u.id);
       ledger(u.id, credits - before, `plan:${b.plan}`, { by: req.user.id, note: 'Plan changed by admin' });
     }
     if (b.credits !== undefined) {
@@ -274,6 +276,16 @@ router.delete('/admin/users/:id', (req, res) => {
   for (const b of all('SELECT id FROM brands WHERE owner_id = ?', u.id)) deleteBrand(b.id);
   run('DELETE FROM users WHERE id = ?', u.id);
   res.json({ ok: true });
+});
+
+// ---------------------------------------------------------------- payments
+router.get('/admin/payments', (req, res) => {
+  const { days, from } = windowOf(req);
+  res.json({
+    days,
+    payments: all('SELECT p.*, u.email, u.name FROM payments p JOIN users u ON u.id = p.user_id WHERE p.created_at >= ? ORDER BY p.created_at DESC LIMIT 500', from),
+    revenue: all("SELECT currency, SUM(amount) AS amount, COUNT(*) AS n FROM payments WHERE status = 'succeeded' AND created_at >= ? GROUP BY currency", from),
+  });
 });
 
 // ---------------------------------------------------------------- API usage

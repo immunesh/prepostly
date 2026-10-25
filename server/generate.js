@@ -218,8 +218,8 @@ export async function renderPost({ brand, post, content, version }) {
   for (const f of fs.readdirSync(dir)) if (/^v\d+-/.test(f) && !f.startsWith(`v${version}-`)) fs.rmSync(path.join(dir, f), { force: true });
   const payer = payerFor(brand);
   const watermark = Boolean(planStatus(payer).watermark);
-  const logoRef = brand.logo_light || brand.logo_dark;
-  const logo = logoRef ? await toDataUri(logoRef).catch(() => null) : null;
+  const logo = brand.logo_light ? await toDataUri(brand.logo_light).catch(() => null) : null;
+  const logoDark = brand.logo_dark ? await toDataUri(brand.logo_dark).catch(() => null) : null;
   const fmt = FORMATS[post.format];
   const isVideo = post.media_type === 'video';
   const slides = content.slides || [];
@@ -232,7 +232,7 @@ export async function renderPost({ brand, post, content, version }) {
     const slide = slides[i];
     const image = slide.image ? await toDataUri(slide.image).catch(() => null) : null;
     const withCaption = isVideo && slide.narration && narrate ? { ...slide, caption: slide.narration } : slide;
-    const { png } = await renderSlide({ brand, slide: withCaption, index: i, total: isVideo ? 1 : slides.length, format: post.format, template: post.template, assets: { image, logo }, watermark, seed: post.id });
+    const { png } = await renderSlide({ brand, slide: withCaption, index: i, total: isVideo ? 1 : slides.length, format: post.format, template: post.template, assets: { image, logo, logoDark }, watermark, seed: post.id });
     const file = `v${version}-${i + 1}.png`;
     fs.writeFileSync(path.join(dir, file), png);
     const url = `/media/${post.id}/${file}`;
