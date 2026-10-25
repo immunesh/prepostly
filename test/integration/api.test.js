@@ -2,7 +2,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import { startServer, stopServer, startFixtureSite, newUser, Client, pngSize, mediaFile } from '../helpers.js';
+import { startServer, stopServer, startFixtureSite, newUser, Client, pngSize, mediaFile, meanVolume } from '../helpers.js';
 
 let base;
 let site;
@@ -176,6 +176,8 @@ describe('content generation', () => {
     assert.equal(p.media.filter((m) => m.kind === 'frame').length, 3);
     assert.ok(p.cover);
     assert.equal(p.credits_used, 40);
+    assert.equal(video.music, 'upbeat', 'videos get background music by default');
+    assert.ok(await meanVolume(mediaFile(video.url)) > -40, 'the soundtrack is audible');
 
     // A design change re-encodes in the background; the current video stays until the new one is done.
     const r2 = await owner.patch(`/api/posts/${p.id}`, { template: 'neon' });
@@ -190,6 +192,15 @@ describe('content generation', () => {
     assert.deepEqual([after.status, after.template, after.version, after.error], ['ready', 'neon', 2, null]);
     assert.match(after.media.find((m) => m.kind === 'video').url, /\/v2-video\.mp4$/);
     assert.ok(!fs.existsSync(mediaFile(video.url)), 'the old version is removed once the new one is ready');
+
+    // Music can be changed or turned off; it re-renders like a design change.
+    assert.equal((await owner.patch(`/api/posts/${p.id}`, { music: 'disco' })).status, 400);
+    assert.equal((await owner.patch(`/api/posts/${p.id}`, { music: 'none' })).data.status, 'rendering');
+    await owner.idle();
+    const quiet = (await owner.get(`/api/posts/${p.id}`)).data;
+    const quietVideo = quiet.media.find((m) => m.kind === 'video');
+    assert.deepEqual([quiet.status, quiet.content.music, quietVideo.music, quiet.template], ['ready', 'none', 'none', 'neon']);
+    assert.ok(await meanVolume(mediaFile(quietVideo.url)) < -80, 'no music means a silent track');
   });
 
   test('validation errors', async () => {

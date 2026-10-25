@@ -43,6 +43,14 @@ export const LANGUAGES = ['English', 'Spanish', 'French', 'German', 'Italian', '
 export const FONTS = ['Poppins', 'Inter', 'Montserrat', 'Playfair Display', 'Anton', 'Lora', 'Oswald', 'Raleway'];
 
 // Kokoro voices (on-device TTS).
+// Background music for slide videos, composed by the app itself (free to use, no licensing).
+export const MUSIC = {
+  upbeat: { label: 'Upbeat', description: 'Bright, positive and energetic.' },
+  calm: { label: 'Calm', description: 'Soft and relaxed, no drums.' },
+  cinematic: { label: 'Cinematic', description: 'Moody and dramatic.' },
+  none: { label: 'No music', description: 'Silent, or narration only.' },
+};
+
 export const VOICES = {
   af_heart: 'Heart (US, female)',
   af_bella: 'Bella (US, female)',

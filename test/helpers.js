@@ -90,6 +90,14 @@ export function mediaFile(url) {
   return path.join(DATA_DIR, url.replace(/^\//, ''));
 }
 
+/** Mean loudness of a media file's audio in dB (about -91 for digital silence). */
+export async function meanVolume(file) {
+  const { default: ffmpegPath } = await import('ffmpeg-static');
+  const { spawnSync } = await import('node:child_process');
+  const { stderr } = spawnSync(ffmpegPath, ['-hide_banner', '-i', file, '-af', 'volumedetect', '-vn', '-f', 'null', '-'], { encoding: 'utf8' });
+  return Number(/mean_volume: (-?[\d.]+|-inf) dB/.exec(stderr)?.[1].replace('-inf', '-1000') ?? NaN);
+}
+
 // ---------------------------------------------------------------- fixture website & store
 const PRODUCT_PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR42mNk+M9Qz0AEYBxVSF+FAP5FDvcfRYWgAAAAAElFTkSuQmCC';
 

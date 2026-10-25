@@ -3,7 +3,7 @@ import path from 'node:path';
 import { config } from './config.js';
 import { one, all, run, insert, update, uuid, json, now } from './db.js';
 import { HttpError } from './auth.js';
-import { POST_TYPES, FORMATS, TEMPLATES, CREDIT_COSTS, LANGUAGES } from './catalog.js';
+import { POST_TYPES, FORMATS, TEMPLATES, CREDIT_COSTS, LANGUAGES, MUSIC } from './catalog.js';
 import { charge, refund, payerFor, planStatus } from './credits.js';
 import { writePost, boostPrompt } from './engines/content.js';
 import { renderSlide, watermarkPng, paletteFor } from './engines/render.js';
@@ -12,6 +12,7 @@ import { extractArticle } from './engines/scraper.js';
 import { composeVideo, fitVideo, probeDuration, extractFrame, sceneStarts, XFADE } from './engines/video.js';
 import { avatarAvailable, renderAvatarVideo } from './engines/avatar.js';
 import { synthesize, writeWav, SAMPLE_RATE } from './engines/tts.js';
+import { composeMusic } from './engines/music.js';
 import { notify } from './notify.js';
 import { withMeter } from './usage.js';
 
@@ -274,19 +275,26 @@ async function renderVersion({ brand, post, content, version, dir }) {
     const reading = Math.min(4.5, 1.8 + (String(s.headline).length + String(s.body || '').length) / 40);
     return Math.max(2.5, spoken, clips.length ? 0 : reading) + XFADE;
   });
+  // Background music (on by default) sits quietly under the narration, or carries the video alone.
+  const music = MUSIC[content.music] ? content.music : 'upbeat';
   let audio = null;
-  if (clips.length) {
+  if (clips.length || music !== 'none') {
     const { starts, total } = sceneStarts(durations);
     const track = new Float32Array(Math.ceil(total * SAMPLE_RATE));
     clips.forEach((c, i) => c && track.set(c.subarray(0, Math.max(0, track.length - Math.round((starts[i] + 0.15) * SAMPLE_RATE))), Math.round((starts[i] + 0.15) * SAMPLE_RATE)));
-    audio = path.join(dir, `v${version}-voice.wav`);
+    if (music !== 'none') {
+      const bed = composeMusic({ seconds: total, mood: music, seed: post.id, rate: SAMPLE_RATE });
+      const gain = clips.length ? 0.3 : 0.9;
+      for (let i = 0; i < track.length; i++) track[i] = Math.max(-1, Math.min(1, track[i] + bed[i] * gain));
+    }
+    audio = path.join(dir, `v${version}-audio.wav`);
     writeWav(audio, track);
   }
   const outFile = `v${version}-video.mp4`;
   const { duration } = await composeVideo({ scenes: frames.map((f, i) => ({ image: f.image, duration: durations[i] })), w: fmt.w, h: fmt.h, out: path.join(dir, outFile), audio });
   if (audio) fs.rmSync(audio, { force: true });
   return {
-    media: [{ kind: 'video', url: `/media/${post.id}/${outFile}`, w: fmt.w, h: fmt.h, duration: Number(duration.toFixed(2)), narrated: Boolean(clips.length) }, ...frames.map((f) => ({ kind: 'frame', url: f.url, w: fmt.w, h: fmt.h }))],
+    media: [{ kind: 'video', url: `/media/${post.id}/${outFile}`, w: fmt.w, h: fmt.h, duration: Number(duration.toFixed(2)), narrated: Boolean(clips.length), music }, ...frames.map((f) => ({ kind: 'frame', url: f.url, w: fmt.w, h: fmt.h }))],
     cover: frames[0]?.url || null,
   };
 }

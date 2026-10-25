@@ -424,3 +424,25 @@ test('Openverse searches keywords, then drops the first or last word', async () 
     config.openverse = false;
   }
 });
+
+describe('background music', () => {
+  test('each mood makes a full-length, audible, unclipped track that is the same for the same post', async () => {
+    const { composeMusic, MUSIC_MOODS } = await import('../../server/engines/music.js');
+    const { MUSIC } = await import('../../server/catalog.js');
+    assert.deepEqual([...MUSIC_MOODS, 'none'].sort(), Object.keys(MUSIC).sort());
+    for (const mood of MUSIC_MOODS) {
+      const a = composeMusic({ seconds: 6, mood, seed: 'post-1', rate: 24000 });
+      assert.equal(a.length, 6 * 24000);
+      let peak = 0;
+      let energy = 0;
+      for (const x of a) { peak = Math.max(peak, Math.abs(x)); energy += x * x; }
+      assert.ok(peak <= 0.51 && peak > 0.4, `${mood} peak ${peak}`);
+      assert.ok(Math.sqrt(energy / a.length) > 0.03, `${mood} is audible`);
+      assert.equal(a[0], 0, 'fades in from silence');
+      assert.deepEqual(composeMusic({ seconds: 6, mood, seed: 'post-1', rate: 24000 }), a);
+    }
+    const other = composeMusic({ seconds: 6, mood: 'upbeat', seed: 'post-2', rate: 24000 });
+    assert.notDeepEqual(other, composeMusic({ seconds: 6, mood: 'upbeat', seed: 'post-1', rate: 24000 }));
+    assert.throws(() => composeMusic({ seconds: 2, mood: 'disco' }), /Unknown music/);
+  });
+});

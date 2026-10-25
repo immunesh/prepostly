@@ -84,6 +84,8 @@ export default function PostView() {
   const updating = p.status === 'rendering';
   const editable = can('editor');
   const canChange = editable && !updating;
+  // Videos made before background music existed have none.
+  const music = video?.music || 'none';
 
   const saveSlides = async () => {
     const updated = await patch(`/api/posts/${id}`, { content: { slides: draft } });
@@ -118,7 +120,7 @@ export default function PostView() {
       <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.4fr) minmax(320px, 1fr)', alignItems: 'start' }}>
         <div className="card pad stack">
           {video && <video className="preview-video" src={video.url} poster={p.cover} controls playsInline style={{ alignSelf: 'center', maxWidth: '100%' }} />}
-          {video && <p className="tiny muted center">{video.duration}s · {video.narrated ? '🎙️ narrated' : 'music-free'} · scenes below</p>}
+          {video && <p className="tiny muted center">{[`${video.duration}s`, video.narrated && '🎙️ narrated', music !== 'none' && `🎵 ${catalog?.music?.[music]?.label || music} music`, 'scenes below'].filter(Boolean).join(' · ')}</p>}
           <div className="slides">
             {images.map((m, i) => <img key={m.url} src={`${m.url}?v=${p.version}`} alt={`Slide ${i + 1}`} className={i === slide ? 'on' : ''} onClick={() => setSlide(i)} style={video ? { height: 200 } : undefined} />)}
           </div>
@@ -173,6 +175,18 @@ export default function PostView() {
                     </AsyncButton>
                   ))}
                 </div>
+                {video && (
+                  <>
+                    <div className="divider" />
+                    <span className="label">Background music</span>
+                    <p className="small muted">Original music made for your video, free to use anywhere. It plays softly under narration.</p>
+                    <div className="chips">
+                      {Object.entries(catalog?.music || {}).map(([k, m]) => (
+                        <AsyncButton key={k} className={`chip ${music === k ? 'on' : ''}`} title={m.description} disabled={!canChange || music === k} onError={fail} onClick={async () => { setData({ ...p, ...(await patch(`/api/posts/${id}`, { music: k })) }); }}>{m.label}</AsyncButton>
+                      ))}
+                    </div>
+                  </>
+                )}
                 <div className="divider" />
                 <span className="label">Resize with AI</span>
                 <p className="small muted">Creates a linked copy in another size ({catalog?.costs.resize} credits).</p>

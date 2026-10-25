@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { one, json } from '../db.js';
 import { config } from '../config.js';
 import { HttpError, requireUser, brandFor } from '../auth.js';
-import { POST_TYPES, FORMATS, TEMPLATES, TONES, LANGUAGES, FONTS, VOICES, PLANS, CREDIT_COSTS, ROLES, AUTOPILOT_SUGGESTIONS } from '../catalog.js';
+import { POST_TYPES, FORMATS, TEMPLATES, TONES, LANGUAGES, FONTS, VOICES, MUSIC, PLANS, CREDIT_COSTS, ROLES, AUTOPILOT_SUGGESTIONS } from '../catalog.js';
 import { upcomingSpecialDays } from '../engines/content.js';
 import { platformList } from '../publishers/index.js';
 
@@ -11,7 +11,7 @@ import { platformList } from '../publishers/index.js';
 export const router = Router();
 
 router.get('/catalog', (_req, res) => {
-  res.json({ post_types: POST_TYPES, formats: FORMATS, templates: TEMPLATES, tones: TONES, languages: LANGUAGES, fonts: FONTS, voices: VOICES, plans: PLANS, costs: CREDIT_COSTS, roles: ROLES, platforms: platformList(), special_days: upcomingSpecialDays(new Date(), 10), autopilot_suggestions: AUTOPILOT_SUGGESTIONS, legal: { name: config.legalName, email: config.supportEmail } });
+  res.json({ post_types: POST_TYPES, formats: FORMATS, templates: TEMPLATES, tones: TONES, languages: LANGUAGES, fonts: FONTS, voices: VOICES, music: MUSIC, plans: PLANS, costs: CREDIT_COSTS, roles: ROLES, platforms: platformList(), special_days: upcomingSpecialDays(new Date(), 10), autopilot_suggestions: AUTOPILOT_SUGGESTIONS, legal: { name: config.legalName, email: config.supportEmail } });
 });
 
 router.get('/platforms', (_req, res) => res.json(platformList()));

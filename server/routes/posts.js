@@ -5,7 +5,7 @@ import express, { Router } from 'express';
 import { one, all, run, uuid, now, insert, update, shortId, json } from '../db.js';
 import { config } from '../config.js';
 import { HttpError, requireUser, brandFor } from '../auth.js';
-import { POST_TYPES } from '../catalog.js';
+import { POST_TYPES, MUSIC } from '../catalog.js';
 import { createPost, getPost, hydrate, rerender, resizePost, retryPost, costFor, idle } from '../generate.js';
 import { boostPrompt, rewriteCaption, makeHashtags } from '../engines/content.js';
 import { searchStock, stockAvailable, sniffMime } from '../engines/images.js';
@@ -120,8 +120,11 @@ router.patch('/posts/:id', async (req, res) => {
   if (req.body.caption !== undefined) meta.caption = String(req.body.caption).slice(0, 5000);
   if (req.body.hashtags !== undefined) meta.hashtags = (Array.isArray(req.body.hashtags) ? req.body.hashtags.join(' ') : String(req.body.hashtags)).slice(0, 1000);
   if (Object.keys(meta).length) update('posts', post.id, { ...meta, updated_at: now() });
-  if (req.body.content !== undefined || req.body.template !== undefined) {
-    const content = req.body.content ? { ...post.content, slides: sanitizeSlides(req.body.content.slides || post.content.slides) } : undefined;
+  if (req.body.content !== undefined || req.body.template !== undefined || req.body.music !== undefined) {
+    if (req.body.music !== undefined && (post.media_type !== 'video' || post.type === 'avatar_video')) throw new HttpError(400, 'Music can only be set on slide videos.');
+    if (req.body.music !== undefined && !MUSIC[req.body.music]) throw new HttpError(400, `Unknown music "${req.body.music}".`);
+    let content = req.body.content ? { ...post.content, slides: sanitizeSlides(req.body.content.slides || post.content.slides) } : undefined;
+    if (req.body.music !== undefined) content = { ...(content || post.content), music: req.body.music };
     return res.json(await rerender(post.id, { content, template: req.body.template }));
   }
   res.json(getPost(post.id));
