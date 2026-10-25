@@ -14,7 +14,7 @@ export default function PostCard({ post, selected, onSelect, footer }) {
       <Link to={`/app/posts/${post.id}`} className="post-thumb" style={{ aspectRatio: post.format === 'story' ? '9 / 16' : post.format === 'square' ? '1' : post.format === 'landscape' ? '16 / 9' : '4 / 5' }}>
         {post.status === 'generating' && <div className="gen"><Spinner lg /><span>Creating your content…</span></div>}
         {post.status === 'failed' && <div className="gen"><span style={{ fontSize: 28 }}>⚠️</span><span>Couldn’t generate</span><span className="tiny">No credits were used</span></div>}
-        {post.status === 'ready' && img && <img src={img} alt={post.title} loading="lazy" />}
+        {['ready', 'rendering'].includes(post.status) && img && <img src={img} alt={post.title} loading="lazy" />}
         <span className="tag badge" style={{ background: 'rgba(255,255,255,0.92)' }}>{TYPE_ICON[post.type]} {post.media_type}</span>
         {slides > 1 && <span className="count">1/{slides}</span>}
         {post.media?.some((m) => m.kind === 'video') && <span className="count">▶ {Math.round(post.media.find((m) => m.kind === 'video').duration)}s</span>}

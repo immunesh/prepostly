@@ -17,9 +17,9 @@ export default function Library() {
   const query = new URLSearchParams({ ...(q && { q }), ...(media && { media }), ...(status && { status }), ...(archived && { archived: '1' }), limit: '60' }).toString();
   const [data, { loading, error, reload }] = useLoad(() => get(`/api/posts?${query}`), [query]);
 
-  // Poll while anything is generating.
+  // Poll while anything is generating or updating.
   useEffect(() => {
-    if (!data?.posts.some((p) => p.status === 'generating')) return;
+    if (!data?.posts.some((p) => ['generating', 'rendering'].includes(p.status))) return;
     const t = setTimeout(reload, 2500);
     return () => clearTimeout(t);
   }, [data, reload]);

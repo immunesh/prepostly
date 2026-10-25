@@ -176,6 +176,20 @@ describe('content generation', () => {
     assert.equal(p.media.filter((m) => m.kind === 'frame').length, 3);
     assert.ok(p.cover);
     assert.equal(p.credits_used, 40);
+
+    // A design change re-encodes in the background; the current video stays until the new one is done.
+    const r2 = await owner.patch(`/api/posts/${p.id}`, { template: 'neon' });
+    assert.equal(r2.status, 200, JSON.stringify(r2.data));
+    assert.equal(r2.data.status, 'rendering');
+    assert.equal(r2.data.version, 1);
+    assert.ok(fs.existsSync(mediaFile(video.url)));
+    assert.equal((await owner.patch(`/api/posts/${p.id}`, { template: 'bold' })).status, 409);
+    assert.equal((await owner.post(`/api/posts/${p.id}/duplicate`)).status, 409);
+    await owner.idle();
+    const after = (await owner.get(`/api/posts/${p.id}`)).data;
+    assert.deepEqual([after.status, after.template, after.version, after.error], ['ready', 'neon', 2, null]);
+    assert.match(after.media.find((m) => m.kind === 'video').url, /\/v2-video\.mp4$/);
+    assert.ok(!fs.existsSync(mediaFile(video.url)), 'the old version is removed once the new one is ready');
   });
 
   test('validation errors', async () => {

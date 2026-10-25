@@ -25,9 +25,9 @@ export const onPostUpdate = (fn) => (listeners.add(fn), () => listeners.delete(f
 const emit = (post) => listeners.forEach((fn) => { try { fn(post); } catch { /* listener errors are not ours */ } });
 
 function enqueue(task) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     waiting.push(async () => {
-      try { resolve(await task()); } finally {
+      try { resolve(await task()); } catch (e) { reject(e); } finally {
         active--;
         pump();
       }
@@ -102,8 +102,9 @@ export function queueGeneration(id) {
   return enqueue(() => generate(id));
 }
 
-/** Re-queue posts left mid-generation by a restart. */
+/** Re-queue posts left mid-generation by a restart; an interrupted re-render keeps its previous version. */
 export function resumePending() {
+  run("UPDATE posts SET status = 'ready' WHERE status = 'rendering'");
   for (const p of all("SELECT id FROM posts WHERE status = 'generating'")) queueGeneration(p.id);
 }
 
@@ -212,10 +213,24 @@ async function attachImages({ brand, post, input, content, product }) {
 }
 
 /** Render slides (and the video, for video posts). Returns { media, cover }. */
+/** Render `version` of a post; earlier versions' files are removed only once it succeeds. */
 export async function renderPost({ brand, post, content, version }) {
   const dir = path.join(config.dataDir, 'media', post.id);
   fs.mkdirSync(dir, { recursive: true });
-  for (const f of fs.readdirSync(dir)) if (/^v\d+-/.test(f) && !f.startsWith(`v${version}-`)) fs.rmSync(path.join(dir, f), { force: true });
+  const prune = (keep) => {
+    for (const f of fs.readdirSync(dir)) if (/^v\d+-/.test(f) && keep !== f.startsWith(`v${version}-`)) fs.rmSync(path.join(dir, f), { force: true });
+  };
+  try {
+    const rendered = await renderVersion({ brand, post, content, version, dir });
+    prune(true);
+    return rendered;
+  } catch (e) {
+    prune(false);
+    throw e;
+  }
+}
+
+async function renderVersion({ brand, post, content, version, dir }) {
   const payer = payerFor(brand);
   const watermark = Boolean(planStatus(payer).watermark);
   const logo = brand.logo_light ? await toDataUri(brand.logo_light).catch(() => null) : null;
@@ -301,18 +316,31 @@ async function renderAvatarPost({ brand, post, content, dir, fmt, watermark, ver
   };
 }
 
-/** Re-render a post after edits (content, template or brand changes). */
+/**
+ * Re-render a post after edits (content, template or brand changes). Images render before this
+ * returns; a video re-encodes in the background (status 'rendering') because it can take minutes.
+ */
 export async function rerender(postId, patch = {}) {
   const post = getPost(postId);
   if (!post) throw new HttpError(404, 'Post not found.');
   if (post.status === 'generating') throw new HttpError(409, 'This post is still generating.');
+  if (post.status === 'rendering') throw new HttpError(409, 'This video is still updating. Try again when it’s done.');
   const brand = one('SELECT * FROM brands WHERE id = ?', post.brand_id);
   const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
   const merged = { ...post, ...defined, content: defined.content || post.content };
   if (merged.template && !TEMPLATES[merged.template]) throw new HttpError(400, `Unknown template "${merged.template}".`);
   const version = post.version + 1;
-  const rendered = await enqueue(() => renderPost({ brand, post: merged, content: merged.content, version }));
-  update('posts', postId, { content: merged.content, template: merged.template, media: rendered.media, cover: rendered.cover, version, status: 'ready', updated_at: now() });
+  const job = enqueue(() => renderPost({ brand, post: merged, content: merged.content, version })).then((rendered) => {
+    update('posts', postId, { content: merged.content, template: merged.template, media: rendered.media, cover: rendered.cover, version, status: 'ready', error: null, updated_at: now() });
+    return getPost(postId);
+  });
+  if (post.media_type !== 'video') return job;
+  update('posts', postId, { status: 'rendering', error: null, updated_at: now() });
+  job.catch((e) => {
+    console.error(`[rerender] ${postId} failed:`, e.message);
+    update('posts', postId, { status: 'ready', error: `Couldn’t update the video: ${e.message}`.slice(0, 500), updated_at: now() });
+    return getPost(postId);
+  }).then((p) => p && emit(p));
   return getPost(postId);
 }
 

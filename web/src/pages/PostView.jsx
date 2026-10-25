@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { get, post, patch, del, fmtDate, PLATFORM_ICON, TYPE_ICON } from '../lib/api.js';
 import { useApp, useLoad } from '../lib/app.jsx';
@@ -32,8 +32,13 @@ export default function PostView() {
   const [tick, setTick] = useState(0);
   const [picker, setPicker] = useState(false);
 
+  const prevStatus = useRef(p?.status);
   useEffect(() => {
-    if (p?.status !== 'generating') return;
+    if (prevStatus.current === 'rendering' && p?.status === 'ready' && !p.error) toast('Video updated', 'ok');
+    prevStatus.current = p?.status;
+  }, [p?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!['generating', 'rendering'].includes(p?.status)) return;
     const t = setInterval(() => { setTick((x) => x + 1); reload(); }, 2000);
     return () => clearInterval(t);
   }, [p?.status, reload]);
@@ -75,12 +80,15 @@ export default function PostView() {
   const view = avatar && ['edit', 'design'].includes(tab) ? 'caption' : tab;
   const s = draft?.[slide];
   const dirty = draft && JSON.stringify(draft) !== JSON.stringify(p.content.slides);
+  // A video re-encodes in the background after an edit; the current version stays visible meanwhile.
+  const updating = p.status === 'rendering';
   const editable = can('editor');
+  const canChange = editable && !updating;
 
   const saveSlides = async () => {
     const updated = await patch(`/api/posts/${id}`, { content: { slides: draft } });
     setData({ ...p, ...updated });
-    toast('Changes applied', 'ok');
+    toast(updated.status === 'rendering' ? 'Updating the video…' : 'Changes applied', updated.status === 'rendering' ? undefined : 'ok');
   };
   const setField = (k, v) => setDraft(draft.map((x, i) => (i === slide ? { ...x, [k]: v } : x)));
 
@@ -93,7 +101,7 @@ export default function PostView() {
           <p className="small">Created {fmtDate(p.created_at)} · v{p.version} · {p.writer === 'claude' ? 'Written by Claude' : 'Offline writer'} · {p.credits_used} credits</p>
         </div>
         <div className="row wrap">
-          {editable && <button className="btn primary" onClick={() => setPublishing(true)}>🚀 Publish / schedule</button>}
+          {editable && <button className="btn primary" disabled={updating} onClick={() => setPublishing(true)}>🚀 Publish / schedule</button>}
           <Dropdown trigger={<button className="btn">⋯ More</button>}>
             {(video ? [video] : images).map((m, i) => <a key={m.url} href={m.url} download>{video ? '⬇️ Download video (MP4)' : `⬇️ Download slide ${i + 1}`}</a>)}
             {editable && <button onClick={async () => { try { const d = await post(`/api/posts/${id}/duplicate`); nav(`/app/posts/${d.id}`); toast('Duplicated', 'ok'); } catch (e) { fail(e); } }}>📄 Duplicate</button>}
@@ -104,6 +112,8 @@ export default function PostView() {
           </Dropdown>
         </div>
       </div>
+      {updating && <div className="alert info mb"><Spinner /><span>Updating the video with your changes. This takes about a minute; you can leave this page.</span></div>}
+      {!updating && p.error && <div className="alert warn mb"><span>⚠️</span><span>{p.error} Your previous version is unchanged.</span></div>}
 
       <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.4fr) minmax(320px, 1fr)', alignItems: 'start' }}>
         <div className="card pad stack">
@@ -146,7 +156,7 @@ export default function PostView() {
                 </div>
                 {editable && (
                   <div className="row">
-                    <AsyncButton className="btn primary" disabled={!dirty} onError={fail} onClick={saveSlides}>Apply changes</AsyncButton>
+                    <AsyncButton className="btn primary" disabled={!dirty || updating} onError={fail} onClick={saveSlides}>Apply changes</AsyncButton>
                     {dirty && <button className="btn ghost" onClick={() => setDraft(structuredClone(p.content.slides))}>Reset</button>}
                   </div>
                 )}
@@ -158,7 +168,7 @@ export default function PostView() {
                 <span className="label">Design</span>
                 <div className="grid g2">
                   {Object.entries(catalog?.templates || {}).map(([k, t]) => (
-                    <AsyncButton key={k} className={`type-card ${p.template === k ? 'on' : ''}`} disabled={!editable || p.template === k} onError={fail} onClick={async () => { setData({ ...p, ...(await patch(`/api/posts/${id}`, { template: k })) }); }}>
+                    <AsyncButton key={k} className={`type-card ${p.template === k ? 'on' : ''}`} disabled={!canChange || p.template === k} onError={fail} onClick={async () => { setData({ ...p, ...(await patch(`/api/posts/${id}`, { template: k })) }); }}>
                       <span className="lbl">{t.label}</span><span className="tiny muted">{t.description}</span>
                     </AsyncButton>
                   ))}
@@ -168,7 +178,7 @@ export default function PostView() {
                 <p className="small muted">Creates a linked copy in another size ({catalog?.costs.resize} credits).</p>
                 <div className="chips">
                   {Object.entries(catalog?.formats || {}).filter(([k]) => k !== p.format).map(([k, f]) => (
-                    <AsyncButton key={k} className="chip" disabled={!editable} onError={fail} onClick={async () => { const v = await post(`/api/posts/${id}/resize`, { format: k }); toast(`Resized to ${f.ratio}`, 'ok'); refresh(); nav(`/app/posts/${v.id}`); }}>{f.label}</AsyncButton>
+                    <AsyncButton key={k} className="chip" disabled={!canChange} onError={fail} onClick={async () => { const v = await post(`/api/posts/${id}/resize`, { format: k }); toast(`Resized to ${f.ratio}`, 'ok'); refresh(); nav(`/app/posts/${v.id}`); }}>{f.label}</AsyncButton>
                   ))}
                 </div>
               </>

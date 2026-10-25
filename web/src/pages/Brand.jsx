@@ -147,7 +147,7 @@ function Social() {
           <table className="table"><tbody>
             {accounts.map((a) => (
               <tr key={a.id}>
-                <td style={{ width: 40 }}><Avatar src={a.avatar} name={a.name} /></td>
+                <td style={{ width: 60 }}><Avatar src={a.avatar} name={a.name} size={36} /></td>
                 <td><div className="bold">{a.name}</div><div className="tiny muted">{PLATFORM_ICON[a.platform]} {catalog.platforms.find((p) => p.id === a.platform)?.label}{a.username ? ` · @${a.username}` : ''}{a.followers != null ? ` · ${a.followers.toLocaleString()} followers` : ''}</div></td>
                 <td>{a.needs_relink ? <span className="badge err">Needs relink</span> : <span className="badge ok">Active</span>}</td>
                 <td>{a.boards?.length > 0 && <select className="select" style={{ width: 180 }} value={a.board_id || ''} disabled={!admin} onChange={async (e) => { await patch(`/api/accounts/${a.id}`, { board_id: e.target.value }); reload(); }} aria-label="Pinterest board">{a.boards.map((bd) => <option key={bd.id} value={bd.id}>{bd.name}</option>)}</select>}</td>
