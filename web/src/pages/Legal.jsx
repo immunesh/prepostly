@@ -52,7 +52,7 @@ export function Privacy() {
       <h3>Who we share it with</h3>
       <ul>
         <li><b>Social platforms</b> you connect (such as Facebook, Instagram, Threads, LinkedIn, X, Pinterest, YouTube, TikTok and Google Business Profile), only to publish and to read your posts’ metrics.</li>
-        <li><b>AI providers</b> that generate content when enabled: Anthropic (text), OpenAI (images) and HeyGen (avatar videos). They receive your prompt and brand details needed for that request.</li>
+        <li><b>AI providers</b> that generate content when enabled: Anthropic (text), Cloudflare and OpenAI (images) and HeyGen (avatar videos). They receive your prompt and brand details needed for that request.</li>
         <li><b>Stock photo services</b> (Openverse, Pixabay, Pexels or Unsplash) receive search keywords, never personal data.</li>
         <li>Authorities, if the law requires it.</li>
       </ul>

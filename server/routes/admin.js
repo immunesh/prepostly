@@ -4,7 +4,8 @@ import { config } from '../config.js';
 import { HttpError, requireAdmin, isAdmin, hashPassword } from '../auth.js';
 import { PLANS, CREDIT_COSTS } from '../catalog.js';
 import { planStatus } from '../credits.js';
-import { priceList, claudeCost, heygenCost, openaiImageCost } from '../usage.js';
+import { priceList, claudeCost, heygenCost, openaiImageCost, cloudflareImageCost } from '../usage.js';
+import { aiImageProviders } from '../engines/images.js';
 
 // Site admin dashboard: platform stats, API spend, users and credits. Only site admins
 // (users.is_admin, or an email listed in ADMIN_EMAILS) can call these routes.
@@ -349,14 +350,17 @@ router.get('/admin/pricing', (req, res) => {
   const writer = config.anthropicModel;
   const claude = (k) => claudeCost(writer, { ...TYPICAL[k], cacheRead: 0, cacheWrite: 0 });
   const est = (label, credits, cost, basis) => ({ label, credits, cost: round(cost), usd_per_credit: perCredit(cost, credits), basis });
-  const imageCost = openaiImageCost(null);
+  const imageProvider = aiImageProviders()[0] || config.imageProvider;
+  const imageCost = imageProvider === 'cloudflare' ? cloudflareImageCost() : openaiImageCost(null);
   const estimates = [
     est('Image post', CREDIT_COSTS.image, claude('write_post'), 'One Claude call to write the post; stock photos are free'),
     est('Carousel (5 slides)', CREDIT_COSTS.image + CREDIT_COSTS.carousel_slide * 4, claude('write_post'), 'One Claude call; slides render on the server'),
     est('Video post', CREDIT_COSTS.video, claude('write_post'), 'One Claude call; video renders on the server'),
     est('Voiceover video', CREDIT_COSTS.voiceover_video, claude('write_post'), 'One Claude call; on-device voiceover is free'),
     est('Avatar video (60 s)', CREDIT_COSTS.avatar_video, claude('write_post') + heygenCost(60), `Claude script + HeyGen at $${config.heygenUsdPerMinute}/min`),
-    est('AI image add-on', CREDIT_COSTS.ai_image, imageCost, `${config.openaiImageModel}, ${config.openaiImageUsd != null ? 'flat price from OPENAI_IMAGE_USD' : 'typical price per image'}`),
+    est('AI image add-on', CREDIT_COSTS.ai_image, imageCost, imageProvider === 'cloudflare'
+      ? `FLUX.1 [schnell] on Cloudflare, ${config.cloudflareImageUsd != null ? 'flat price from CLOUDFLARE_IMAGE_USD' : 'list price; about 170 images a day are free'}`
+      : `${config.openaiImageModel}, ${config.openaiImageUsd != null ? 'flat price from OPENAI_IMAGE_USD' : 'typical price per image'}`),
     est('Idea Lab message', CREDIT_COSTS.chat_message, claude('chat_message'), 'One streamed Claude reply'),
     est('Ad concepts', CREDIT_COSTS.ad_concepts, claude('ad_concepts'), 'One Claude call'),
   ];

@@ -39,6 +39,11 @@ export const config = {
   openverse: bool(env('OPENVERSE'), true),
   openaiKey: env('OPENAI_API_KEY'),
   openaiImageModel: env('OPENAI_IMAGE_MODEL', 'gpt-image-1'),
+  // Open-source AI images (FLUX.1 [schnell]) on Cloudflare Workers AI, free within its daily allocation.
+  cloudflareAccountId: env('CLOUDFLARE_ACCOUNT_ID'),
+  cloudflareAiToken: env('CLOUDFLARE_AI_TOKEN'),
+  // Which configured image provider to try first: cloudflare or openai. The other is the fallback.
+  imageProvider: env('IMAGE_PROVIDER', 'cloudflare'),
   heygenKey: env('HEYGEN_API_KEY'),
   // Presenter and voice for avatar videos. Empty picks the account's first avatar and a voice in the post's language.
   heygenAvatarId: env('HEYGEN_AVATAR_ID'),
@@ -57,6 +62,8 @@ export const config = {
   heygenUsdPerMinute: Number(env('HEYGEN_USD_PER_MINUTE', 1)),
   // Flat price per AI image. Empty prices each image from the token usage OpenAI reports.
   openaiImageUsd: env('OPENAI_IMAGE_USD') === '' ? null : Number(env('OPENAI_IMAGE_USD')),
+  // Flat price per Cloudflare image. Empty uses the FLUX.1 [schnell] list price.
+  cloudflareImageUsd: env('CLOUDFLARE_IMAGE_USD') === '' ? null : Number(env('CLOUDFLARE_IMAGE_USD')),
 
   // Billing (Dodo Payments). Without these, plans are assigned by site admins only.
   dodo: {

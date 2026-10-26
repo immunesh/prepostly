@@ -43,6 +43,9 @@ const HAIKU_LONG = { from: 100_000, price: [0.5, 2.5] };
 // OpenAI gpt-image-1 USD per million tokens, and a fallback when a response reports no usage.
 export const OPENAI_IMAGE_PRICES = { text_input: 5, image_input: 10, image_output: 40 };
 const IMAGE_FALLBACK_USD = 0.25;
+// Cloudflare Workers AI list prices for FLUX.1 [schnell]: USD per 512x512 tile and per diffusion step.
+export const CLOUDFLARE_IMAGE_MODEL = '@cf/black-forest-labs/flux-1-schnell';
+const FLUX_SCHNELL = { tile: 0.0000528, step: 0.0001056 };
 
 export function claudePrice(model = '') {
   const key = Object.keys(CLAUDE_PRICES).filter((k) => model.startsWith(k)).sort((a, b) => b.length - a.length)[0];
@@ -67,6 +70,12 @@ export function openaiImageCost(usage) {
   return (text * p.text_input + (d.image_tokens || 0) * p.image_input + (usage.output_tokens || 0) * p.image_output) / 1e6;
 }
 
+/** List price of one 1024x1024 FLUX.1 [schnell] image (the daily free allocation is not subtracted). */
+export function cloudflareImageCost(steps = 4) {
+  if (config.cloudflareImageUsd != null && Number.isFinite(config.cloudflareImageUsd)) return config.cloudflareImageUsd;
+  return 4 * FLUX_SCHNELL.tile + steps * FLUX_SCHNELL.step;
+}
+
 /** Prices the admin dashboard shows next to its cost reports. */
 export function priceList() {
   return {
@@ -76,6 +85,8 @@ export function priceList() {
     openai_image: config.openaiImageUsd ?? null,
     openai_image_model: config.openaiImageModel,
     openai_image_tokens: OPENAI_IMAGE_PRICES,
+    cloudflare_image_model: CLOUDFLARE_IMAGE_MODEL,
+    cloudflare_image: cloudflareImageCost(),
   };
 }
 

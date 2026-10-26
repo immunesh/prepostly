@@ -13,7 +13,7 @@ const usd = (n, d) => {
   return `$${v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 };
 const perCredit = (n) => (n == null ? '—' : usd(n, 4));
-const PROVIDER = { anthropic: 'Claude (Anthropic)', heygen: 'HeyGen', openai: 'OpenAI Images' };
+const PROVIDER = { anthropic: 'Claude (Anthropic)', heygen: 'HeyGen', openai: 'OpenAI Images', cloudflare: 'Cloudflare Workers AI' };
 const FEATURE = {
   write_post: 'Write post', boost_prompt: 'Boost prompt', rewrite_caption: 'Rewrite caption', ad_concepts: 'Ad concepts', plan_topics: 'Auto-posting topics',
   competitor_themes: 'Competitor themes', idea_lab: 'Idea Lab chat', avatar_video: 'Avatar video', ai_image: 'AI image', chat: 'Chat', other: 'Other',
@@ -468,10 +468,11 @@ function Pricing() {
         <Card title="Other providers and credit prices">
           <Table head={['Item', ' Price']} rows={[
             <tr key="hg"><td>HeyGen avatar video</td><R>{usd(p.heygen_per_minute)} / minute</R></tr>,
+            <tr key="cf"><td>{p.cloudflare_image_model.split('/').pop()} image (Cloudflare)</td><R>{usd(p.cloudflare_image, 4)} each; about 170 a day free</R></tr>,
             <tr key="oi"><td>{p.openai_image_model} image</td><R>{p.openai_image != null ? `${usd(p.openai_image)} flat` : `${usd(p.openai_image_tokens.image_output, 0)} / M output tokens`}</R></tr>,
             ...Object.entries(d.credit_costs).map(([k, v]) => <tr key={k}><td className="muted">Credits: {k.replaceAll('_', ' ')}</td><R>{v} credit{v === 1 ? '' : 's'}</R></tr>),
           ]} />
-          <p className="tiny muted mt">Set HEYGEN_USD_PER_MINUTE and OPENAI_IMAGE_USD in the server .env to match your contracts. Claude list prices are built in.</p>
+          <p className="tiny muted mt">Set HEYGEN_USD_PER_MINUTE, OPENAI_IMAGE_USD and CLOUDFLARE_IMAGE_USD in the server .env to match your contracts. Claude list prices are built in.</p>
         </Card>
       </div>
     </>

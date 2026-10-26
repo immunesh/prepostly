@@ -446,3 +446,68 @@ describe('background music', () => {
     assert.throws(() => composeMusic({ seconds: 2, mood: 'disco' }), /Unknown music/);
   });
 });
+
+describe('AI images', () => {
+  let images;
+  let config;
+  let db;
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+  const JPG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+  const keys = ['cloudflareAccountId', 'cloudflareAiToken', 'openaiKey', 'imageProvider'];
+  let saved;
+  before(async () => {
+    images = await import('../../server/engines/images.js');
+    ({ config } = await import('../../server/config.js'));
+    db = await import('../../server/db.js');
+    saved = Object.fromEntries(keys.map((k) => [k, config[k]]));
+  });
+  after(() => Object.assign(config, saved));
+  const cloudflare = (reply) => ({ match: (u) => u.includes('api.cloudflare.com/client/v4/accounts/acct/ai/run/@cf/black-forest-labs/flux-1-schnell'), reply });
+  const openai = (reply) => ({ match: (u) => u.includes('api.openai.com/v1/images/generations'), reply });
+
+  test('providers follow IMAGE_PROVIDER and only count when configured', () => {
+    Object.assign(config, { cloudflareAccountId: '', cloudflareAiToken: '', openaiKey: '', imageProvider: 'cloudflare' });
+    assert.deepEqual(images.aiImageProviders(), []);
+    assert.equal(images.aiImagesAvailable(), false);
+    Object.assign(config, { openaiKey: 'sk' });
+    assert.deepEqual(images.aiImageProviders(), ['openai']);
+    Object.assign(config, { cloudflareAccountId: 'acct', cloudflareAiToken: 'tok' });
+    assert.deepEqual(images.aiImageProviders(), ['cloudflare', 'openai']);
+    Object.assign(config, { imageProvider: 'openai' });
+    assert.deepEqual(images.aiImageProviders(), ['openai', 'cloudflare']);
+  });
+
+  test('Cloudflare FLUX.1 [schnell] sends the prompt as JSON and saves the image', async () => {
+    Object.assign(config, { cloudflareAccountId: 'acct', cloudflareAiToken: 'tok', openaiKey: '', imageProvider: 'cloudflare' });
+    const mock = mockFetch([cloudflare(() => ({ body: { success: true, result: { image: JPG.toString('base64') } } }))]);
+    try {
+      const url = await images.generateAiImage('A cup of cold brew', { size: '1024x1536', dir: 'ai-test' });
+      assert.match(url, /^\/media\/ai-test\/[0-9a-f-]+\.jpg$/);
+      assert.deepEqual(fs.readFileSync(images.localFile(url)), JPG);
+      const call = mock.calls[0];
+      assert.equal(call.method, 'POST');
+      assert.equal(call.headers.authorization, 'Bearer tok');
+      assert.deepEqual(JSON.parse(call.body), { prompt: 'A cup of cold brew', steps: 4 });
+      const row = db.one("SELECT * FROM api_usage WHERE provider = 'cloudflare' ORDER BY rowid DESC LIMIT 1");
+      assert.equal(row.model, '@cf/black-forest-labs/flux-1-schnell');
+      assert.ok(Math.abs(row.cost_usd - (4 * 0.0000528 + 4 * 0.0001056)) < 1e-12, `cost ${row.cost_usd}`);
+    } finally { mock.restore(); }
+  });
+
+  test('a failing provider falls back to the other one', async () => {
+    Object.assign(config, { cloudflareAccountId: 'acct', cloudflareAiToken: 'tok', openaiKey: 'sk', imageProvider: 'cloudflare' });
+    const mock = mockFetch([
+      cloudflare(() => ({ status: 429, body: { success: false, errors: [{ message: 'Daily free allocation used up' }] } })),
+      openai(() => ({ body: { data: [{ b64_json: PNG.toString('base64') }], usage: { input_tokens: 10, output_tokens: 100 } } })),
+    ]);
+    try {
+      const url = await images.generateAiImage('A latte', { size: '1024x1024', dir: 'ai-test' });
+      assert.match(url, /\.png$/);
+      assert.deepEqual(mock.calls.map((c) => new URL(c.url).hostname), ['api.cloudflare.com', 'api.openai.com']);
+    } finally { mock.restore(); }
+    const down = mockFetch([cloudflare(() => ({ status: 500, body: { success: false, errors: [{ message: 'Model overloaded' }] } })), openai(() => ({ status: 500, body: { error: { message: 'down' } } }))]);
+    try {
+      await assert.rejects(images.generateAiImage('A latte', { dir: 'ai-test' }), /Model overloaded/);
+    } finally { down.restore(); }
+  });
+});

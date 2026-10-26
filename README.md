@@ -23,7 +23,8 @@ Everything works without keys out of the box (stock photos come from Openverse; 
 |---|---|
 | `ANTHROPIC_API_KEY` | Claude writes post copy, captions, ad concepts, auto-posting topics, competitor themes and Idea Lab answers in any of 19 languages. Without it, a built-in offline writer produces English copy. |
 | `PEXELS_API_KEY`, `UNSPLASH_ACCESS_KEY` or `PIXABAY_API_KEY` | Stock photos chosen per slide. Without any of them, photos come from Openverse (no key; Creative Commons photos licensed for commercial use; each photo's credit is saved with its slide). Set `OPENVERSE=off` to turn that off. |
-| `OPENAI_API_KEY` | AI-generated images |
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_TOKEN` | Free AI-generated images with the open-source FLUX.1 [schnell] model on Cloudflare Workers AI (about 170 images a day within the free allocation, then well under $0.001 each). The token needs the Workers AI permission. |
+| `OPENAI_API_KEY` | AI-generated images with OpenAI. With both providers set, `IMAGE_PROVIDER` (default `cloudflare`) picks which goes first and the other is the fallback. |
 | `HEYGEN_API_KEY` | UGC avatar videos |
 | `HEYGEN_AVATAR_ID`, `HEYGEN_VOICE_ID` | Presenter and voice for avatar videos (list them with `npm run heygen`). Empty picks your first avatar and a voice in the post's language. |
 | Platform app credentials | OAuth connections for Facebook, Instagram, Threads, LinkedIn profiles and Pages, X, Pinterest, YouTube, TikTok and Google Business Profile. You set them up once; every user then connects their own accounts by logging in on the platform. Platforms without credentials are listed as coming soon |
@@ -91,11 +92,11 @@ Site admins get an **Admin dashboard** link in the sidebar (`/app/admin`). Put y
 
 - **Overview**: users, signups, active users, plans, posts, publishing, credits used and API spend per day.
 - **Users**: search and sort every account; add or remove credits with a note, change plan, suspend (signs them out and blocks API keys), make admin, create or delete accounts.
-- **API usage**: every Claude, HeyGen and OpenAI call with tokens and dollar cost, by model, feature and user.
+- **API usage**: every Claude, HeyGen, OpenAI and Cloudflare call with tokens and dollar cost, by model, feature and user.
 - **Credit ledger**: every credit charge, refund and grant, with who made admin changes.
 - **Credit pricing**: what one credit costs in API fees (measured from real calls, and estimated per action), against revenue per credit on each plan.
 
-Claude costs use built-in list prices per model. Set `HEYGEN_USD_PER_MINUTE` (default 1) and `OPENAI_IMAGE_USD` (empty prices images from token usage) to match your contracts. Calls are recorded from the moment this version runs; earlier spend is not known.
+Claude costs use built-in list prices per model. Set `HEYGEN_USD_PER_MINUTE` (default 1) and `OPENAI_IMAGE_USD` (empty prices images from token usage) and `CLOUDFLARE_IMAGE_USD` (empty uses the FLUX.1 [schnell] list price) to match your contracts. Calls are recorded from the moment this version runs; earlier spend is not known.
 
 ## MCP (use Prepostly from Claude)
 

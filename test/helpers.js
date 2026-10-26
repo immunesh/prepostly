@@ -7,7 +7,7 @@ import http from 'node:http';
 export const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'prepostly-test-'));
 Object.assign(process.env, {
   NODE_ENV: 'test', DATA_DIR, SCHEDULER: 'off', PREPOSTLY_SKIP_DOTENV: '1', LLM_OFFLINE: '1', VOICEOVER: 'off',
-  PEXELS_API_KEY: '', UNSPLASH_ACCESS_KEY: '', PIXABAY_API_KEY: '', OPENVERSE: 'off', OPENAI_API_KEY: '', PUBLIC_URL: '',
+  PEXELS_API_KEY: '', UNSPLASH_ACCESS_KEY: '', PIXABAY_API_KEY: '', OPENVERSE: 'off', OPENAI_API_KEY: '', CLOUDFLARE_ACCOUNT_ID: '', CLOUDFLARE_AI_TOKEN: '', PUBLIC_URL: '',
 });
 
 let serverPromise = null;

@@ -6,7 +6,7 @@ import { promisify } from 'node:util';
 import ffmpegPath from 'ffmpeg-static';
 import { config } from '../config.js';
 import { safeFetch } from '../net.js';
-import { logApiUsage, openaiImageCost } from '../usage.js';
+import { logApiUsage, openaiImageCost, cloudflareImageCost, CLOUDFLARE_IMAGE_MODEL } from '../usage.js';
 
 const exec = promisify(execFile);
 const CACHE = path.join(config.dataDir, 'tmp', 'imgcache');
@@ -163,11 +163,53 @@ async function searchOpenverse(query, { orientation, count }) {
 }
 
 export const stockAvailable = () => Boolean(config.pexelsKey || config.unsplashKey || config.pixabayKey || config.openverse);
-export const aiImagesAvailable = () => Boolean(config.openaiKey);
 
-/** Generate an image with OpenAI Images. Returns an app path under /media. */
+/** Configured AI image providers, the preferred one (IMAGE_PROVIDER) first. */
+export function aiImageProviders() {
+  const ready = { cloudflare: Boolean(config.cloudflareAccountId && config.cloudflareAiToken), openai: Boolean(config.openaiKey) };
+  return [config.imageProvider, ...Object.keys(ready)].filter((p, i, a) => ready[p] && a.indexOf(p) === i);
+}
+export const aiImagesAvailable = () => aiImageProviders().length > 0;
+
+/** Generate an image with the preferred provider, falling back to the other. Returns an app path under /media. */
 export async function generateAiImage(prompt, { size = '1024x1536', dir = 'ai' } = {}) {
-  if (!config.openaiKey) throw new Error('AI image generation needs OPENAI_API_KEY.');
+  const providers = aiImageProviders();
+  if (!providers.length) throw new Error('AI image generation needs CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_AI_TOKEN, or OPENAI_API_KEY.');
+  let error;
+  for (const provider of providers) {
+    try {
+      const buf = await (provider === 'cloudflare' ? cloudflareImage : openaiImage)(prompt, size);
+      const ext = buf[0] === 0xff && buf[1] === 0xd8 ? 'jpg' : buf.toString('latin1', 8, 12) === 'WEBP' ? 'webp' : 'png';
+      const name = `${crypto.randomUUID()}.${ext}`;
+      fs.mkdirSync(path.join(config.dataDir, 'media', dir), { recursive: true });
+      fs.writeFileSync(path.join(config.dataDir, 'media', dir, name), buf);
+      return `/media/${dir}/${name}`;
+    } catch (e) {
+      console.warn(`[images] ${provider} failed:`, e.message);
+      error = error || e;
+    }
+  }
+  throw error;
+}
+
+/** FLUX.1 [schnell] on Cloudflare Workers AI. It makes square 1024x1024 images; slides crop them to fit. */
+async function cloudflareImage(prompt) {
+  const steps = 4;
+  const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${config.cloudflareAccountId}/ai/run/${CLOUDFLARE_IMAGE_MODEL}`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${config.cloudflareAiToken}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ prompt: prompt.slice(0, 2048), steps }),
+    signal: AbortSignal.timeout(120000),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.success === false) throw new Error(j.errors?.[0]?.message || `Image generation failed (${r.status}).`);
+  const b64 = j.result?.image || j.image;
+  if (!b64) throw new Error('Image generation returned no image.');
+  logApiUsage({ provider: 'cloudflare', model: CLOUDFLARE_IMAGE_MODEL, feature: 'ai_image', units: 1, cost: cloudflareImageCost(steps) });
+  return Buffer.from(b64, 'base64');
+}
+
+async function openaiImage(prompt, size) {
   const r = await fetch('https://api.openai.com/v1/images/generations', {
     method: 'POST',
     headers: { authorization: `Bearer ${config.openaiKey}`, 'content-type': 'application/json' },
@@ -178,14 +220,9 @@ export async function generateAiImage(prompt, { size = '1024x1536', dir = 'ai' }
   if (!r.ok) throw new Error(j.error?.message || `Image generation failed (${r.status}).`);
   logApiUsage({ provider: 'openai', model: config.openaiImageModel, feature: 'ai_image', input: j.usage?.input_tokens || 0, output: j.usage?.output_tokens || 0, units: 1, cost: openaiImageCost(j.usage) });
   const b64 = j.data?.[0]?.b64_json;
-  let buf;
-  if (b64) buf = Buffer.from(b64, 'base64');
-  else if (j.data?.[0]?.url) buf = (await safeFetch(j.data[0].url, { accept: 'image/*', maxBytes: 20 * 1024 * 1024 })).buffer;
-  else throw new Error('Image generation returned no image.');
-  const name = `${crypto.randomUUID()}.png`;
-  fs.mkdirSync(path.join(config.dataDir, 'media', dir), { recursive: true });
-  fs.writeFileSync(path.join(config.dataDir, 'media', dir, name), buf);
-  return `/media/${dir}/${name}`;
+  if (b64) return Buffer.from(b64, 'base64');
+  if (j.data?.[0]?.url) return (await safeFetch(j.data[0].url, { accept: 'image/*', maxBytes: 20 * 1024 * 1024 })).buffer;
+  throw new Error('Image generation returned no image.');
 }
 
 export const orientationOf = (format) => (['story', 'pin', 'ig_portrait'].includes(format) ? 'portrait' : format === 'square' ? 'square' : 'landscape');
